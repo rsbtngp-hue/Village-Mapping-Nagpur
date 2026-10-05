@@ -433,7 +433,7 @@ html,body{width:100%;overflow-x:hidden}
           <div>
             <label>Record Storage</label>
             <input type="text" value="Benificary_data • record_json" readonly>
-            <div class="hint">Large uploads are sent in safe chunks; Google stores village-level beneficiary counts in Benificary_data.</div>
+            <div class="hint">Large uploads are sent in safe chunks; Annexure: Google Sheet first (PMKISAN_Farmers via api=pmkisan_beneficiaries), then cached in browser local DB for offline.</div>
           </div>
           <div class="actions" style="margin-top:20px">
             <button class="primary" id="pmUploadBtn" onclick="uploadPmkisanCSV()">⬆ Upload CSV — Independent Upload</button>
@@ -1269,7 +1269,7 @@ function showTab(id, btn){
   btn.classList.add('active');
   if(id === 'dashboard') renderDashboard();
   if(id === 'pmkisan') loadPmkisanSummary();
-  if(id === 'bachat'){ applyBachatAdminUi(); loadBachatSummary(); }
+  if(id === 'bachat'){ applyBachatAdminUi(); loadBachatSummary(); try{ loadPmkisanSummary(); }catch(_e){} }
 }
 
 function fillSelect(sel, values, placeholder, disabled=false){
@@ -2227,6 +2227,127 @@ function pmNormVillage(v){
     .replace(/\s+/g, ' ');
 }
 
+/** Match "Jairampur - (539315)" with "Jairampur". */
+function pmVillageKeyVariants(v){
+  const n = pmNormVillage(v);
+  if (!n) return [];
+  const out = new Set([n]);
+  const s1 = n.replace(/\s*-?\s*\(\d{3,}\)\s*$/, '').trim();
+  if (s1) out.add(s1);
+  const s2 = n.replace(/\s*-\s*\d{3,}\s*$/, '').trim();
+  if (s2) out.add(s2);
+  return [...out];
+}
+
+/**
+ * Fetch farmer-level rows from Google Sheet (source of truth).
+ * api=pmkisan_beneficiaries on Apps Script → sheet PMKISAN_Farmers
+ */
+async function fetchBeneficiariesFromSheet(row, villageKeys){
+  const officeId = String(row?.officeId || '').trim();
+  const officeName = String(row?.officeName || '').trim();
+  let url = API_URL + '?api=pmkisan_beneficiaries'
+    + '&officeId=' + encodeURIComponent(officeId)
+    + '&officeName=' + encodeURIComponent(officeName);
+  const villages = (villageKeys || []).filter(Boolean).slice(0, 40);
+  if (villages.length) url += '&villages=' + encodeURIComponent(villages.join('|'));
+  const res = await jsonp(url, 90000);
+  if (!res || !res.ok) throw new Error((res && res.message) || 'Google Sheet beneficiary API failed');
+  const records = Array.isArray(res.records) ? res.records : (Array.isArray(res.rows) ? res.rows : []);
+  return records.map(r => ({
+    Village: r.Village || r.village || '',
+    village: r.Village || r.village || '',
+    'Sr. No': r['Sr. No'] || r.srNo || r.sr_no || '',
+    'Farmer Name': r['Farmer Name'] || r.farmer_name || r.farmerName || '',
+    Gender: r.Gender || r.gender || '',
+    'Mobile No': r['Mobile No'] || r.mobile || r.mobile_no || '',
+    'Status of A/c Opening': r['Status of A/c Opening'] || r.account_status || '',
+    'Reason if No': r['Reason if No'] || r.reason || '',
+    fingerprint: r.fingerprint || '',
+    State: r.State || '',
+    District: r.District || '',
+    'Sub-District': r['Sub-District'] || r.subDistrict || ''
+  }));
+}
+
+/** Cache sheet farmer rows into browser IndexedDB for offline reuse (new fingerprints only). */
+async function cacheBeneficiariesToLocalDb(records){
+  if (!records || !records.length) return { saved: 0 };
+  try {
+    const prepared = records.map(r => {
+      const x = Object.assign({}, r);
+      x.__fingerprint = r.fingerprint || pmBeneficiaryFingerprint(r);
+      x.Village = x.Village || x.village || '';
+      return x;
+    }).filter(r => r.__fingerprint);
+    if (!prepared.length) return { saved: 0 };
+    // Skip fingerprints already in local DB to avoid unique-index errors
+    const filtered = await pmFilterNewRecords(prepared);
+    const fresh = filtered.newRecords || [];
+    if (!fresh.length) return { saved: 0, skipped: filtered.duplicates || 0 };
+    return await pmSaveChunkToLocal('sheet-sync', 1, fresh);
+  } catch (err) {
+    console.warn('Local cache of sheet beneficiaries failed:', err);
+    return { saved: 0, error: String(err.message || err) };
+  }
+}
+
+/**
+ * Load order:
+ *  1) Google Sheet (online) → then cache to local DB
+ *  2) Local IndexedDB if sheet empty / offline / sheet error
+ */
+async function loadBeneficiariesForOffice(row){
+  const keys = typeof mappedVillageKeysForOffice === 'function' ? mappedVillageKeysForOffice(row) : [];
+  let records = [];
+  let source = 'none';
+
+  if (navigator.onLine) {
+    try {
+      records = await fetchBeneficiariesFromSheet(row, keys);
+      source = 'google_sheet';
+      if (records.length) {
+        // Fire-and-forget local cache so next offline open works
+        cacheBeneficiariesToLocalDb(records).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Sheet fetch failed, trying local DB:', err);
+      if (String(err.message || '').includes('Unknown api')) {
+        // Still try local, but keep a clear hint
+        try {
+          records = await pmGetBeneficiariesForVillages(keys);
+          source = records.length ? 'local_fallback' : 'none';
+        } catch(_e){}
+        if (!records.length) {
+          throw new Error('Deploy Code.gs with api=pmkisan_beneficiaries, then re-upload PM-KISAN CSV so sheet PMKISAN_Farmers is filled.');
+        }
+      } else {
+        try {
+          records = await pmGetBeneficiariesForVillages(keys);
+          source = records.length ? 'local_fallback' : 'none';
+        } catch(_e){}
+        if (!records.length) throw err;
+      }
+    }
+  } else {
+    records = await pmGetBeneficiariesForVillages(keys);
+    source = records.length ? 'local_offline' : 'none';
+  }
+
+  // If sheet returned empty, try local cache as secondary
+  if (!records.length && keys.length) {
+    try {
+      const local = await pmGetBeneficiariesForVillages(keys);
+      if (local.length) {
+        records = local;
+        source = navigator.onLine ? 'local_fallback' : 'local_offline';
+      }
+    } catch(_e){}
+  }
+
+  return { records, source, keys };
+}
+
 function pmCsvParseLine(line){
   const out = [];
   let cur = '', quoted = false;
@@ -2377,7 +2498,9 @@ async function pmSaveChunkToLocal(fileName, chunkNo, records){
 
 
 async function pmGetBeneficiariesForVillages(villageKeys){
-  const keys = [...new Set(villageKeys.map(pmNormVillage).filter(Boolean))];
+  const keys = [...new Set((villageKeys || []).flatMap(k =>
+    (typeof pmVillageKeyVariants === 'function' ? pmVillageKeyVariants(k) : [pmNormVillage(k)])
+  ).filter(Boolean))];
   if(!keys.length) return [];
   const keySet = new Set(keys);
   const db = await pmOpenDb();
@@ -2391,8 +2514,9 @@ async function pmGetBeneficiariesForVillages(villageKeys){
       (rows || []).forEach(r => {
         const id = r.id != null ? 'id:' + r.id : (r.fingerprint || (r['Farmer Name'] + '|' + r.Village + '|' + r['Sr. No']));
         if (seen.has(id)) return;
-        const vk = pmNormVillage(r.villageKey || r.Village || '');
-        if (!keySet.has(vk)) return;
+        const rawVk = r.villageKey || r.Village || r.village || '';
+        const variants = (typeof pmVillageKeyVariants === 'function') ? pmVillageKeyVariants(rawVk) : [pmNormVillage(rawVk)];
+        if (!variants.some(v => keySet.has(v))) return;
         seen.add(id);
         out.push(r);
       });
@@ -2763,29 +2887,51 @@ function mappedVillageKeysForOffice(row){
   const officeId = String(row?.officeId ?? '').trim();
   const officeName = String(row?.officeName ?? '').trim().toLowerCase();
   const division = String(row?.division ?? '').trim();
-  const subDivision = String(row?.subDivision ?? '').trim();
   const soName = String(row?.soName ?? '').trim();
   const villages = DATA.villages || [];
-  let matched = villages.filter(v => {
-    if (!v.mapped) return false;
-    if (officeId && String(v.officeId ?? '').trim() === officeId) return true;
-    return false;
-  });
-  if (!matched.length && officeName) {
-    matched = villages.filter(v => {
-      if (!v.mapped) return false;
-      const vn = String(v.officeName ?? '').trim().toLowerCase();
-      if (vn !== officeName) return false;
-      if (division && String(v.division ?? '').trim() && String(v.division ?? '').trim() !== division) return false;
-      if (soName && String(v.soName ?? '').trim() && String(v.soName ?? '').trim() !== soName) return false;
-      return true;
+  const matched = [];
+  const seen = new Set();
+  function pushVillage(name){
+    const raw = String(name || '').trim();
+    if (!raw) return;
+    const base = (typeof pmVillageKeyVariants === 'function' ? pmVillageKeyVariants(raw)[0] : null) || pmNormVillage(raw);
+    if (!base || seen.has(base)) return;
+    seen.add(base);
+    matched.push(raw);
+  }
+  if (officeId) {
+    villages.forEach(v => {
+      if (!v.mapped) return;
+      if (String(v.officeId ?? '').trim() === officeId) pushVillage(v.village);
     });
   }
-  // Also include villages listed on PM-KISAN summary row if present
-  if (Array.isArray(row?.villages)) {
-    row.villages.forEach(v => matched.push({ village: v, mapped: true }));
+  if (officeName) {
+    villages.forEach(v => {
+      if (!v.mapped) return;
+      if (String(v.officeName ?? '').trim().toLowerCase() !== officeName) return;
+      if (division && String(v.division ?? '').trim() && String(v.division ?? '').trim() !== division) return;
+      if (soName && String(v.soName ?? '').trim() && String(v.soName ?? '').trim() !== soName) return;
+      pushVillage(v.village);
+    });
+    if (!matched.length) {
+      villages.forEach(v => {
+        if (!v.mapped) return;
+        if (String(v.officeName ?? '').trim().toLowerCase() === officeName) pushVillage(v.village);
+      });
+    }
   }
-  return [...new Set(matched.map(v => v.village).filter(Boolean))];
+  if (Array.isArray(row?.villages)) {
+    row.villages.forEach(v => pushVillage(typeof v === 'string' ? v : (v && (v.village || v.name))));
+  }
+  try {
+    ((typeof PMKISAN !== 'undefined' && PMKISAN.rows) || []).forEach(pr => {
+      const sameId = officeId && String(pr.officeId || '').trim() === officeId;
+      const sameName = officeName && String(pr.officeName || '').trim().toLowerCase() === officeName;
+      if (!sameId && !sameName) return;
+      if (Array.isArray(pr.villages)) pr.villages.forEach(v => pushVillage(typeof v === 'string' ? v : (v && (v.village || v.name))));
+    });
+  } catch(_e){}
+  return matched;
 }
 
 async function openPmReport(row){
@@ -2793,25 +2939,22 @@ async function openPmReport(row){
   $('pmReportDate').value = activePmReport.date;
   $('pmReportTitle').textContent = 'Annexure for PM Kisan Samman Nidhi';
   $('pmReportSub').textContent = `${row.division} • ${row.subDivision} • ${row.officeName}`;
-  $('pmReportContent').innerHTML = '<div class="empty-report">Loading beneficiary details…</div>';
+  $('pmReportContent').innerHTML = '<div class="empty-report">Loading beneficiaries (Google Sheet → local cache)…</div>';
   $('pmReportModal').classList.add('open');
   try {
-    const keys = mappedVillageKeysForOffice(row);
-    let records = await pmGetBeneficiariesForVillages(keys);
-    if (!records.length) {
-      const altKeys = (DATA.villages || []).filter(v => v.mapped && ((row.officeId && String(v.officeId) === String(row.officeId)) || (row.officeName && String(v.officeName||'').toLowerCase() === String(row.officeName||'').toLowerCase()))).map(v => v.village);
-      records = await pmGetBeneficiariesForVillages(altKeys);
-    }
+    const loaded = await loadBeneficiariesForOffice(row);
+    let records = loaded.records || [];
     records.sort((a,b) =>
-      String(a.Village).localeCompare(String(b.Village)) ||
+      String(a.Village || '').localeCompare(String(b.Village || '')) ||
       Number(a['Sr. No'] || 0) - Number(b['Sr. No'] || 0) ||
-      String(a['Farmer Name']).localeCompare(String(b['Farmer Name']))
+      String(a['Farmer Name'] || '').localeCompare(String(b['Farmer Name'] || ''))
     );
     activePmReport.records = records;
+    activePmReport._source = loaded.source;
     renderPmReportContent();
   } catch(err) {
     $('pmReportContent').innerHTML =
-      `<div class="empty-report">Unable to load beneficiary details: ${esc(err.message || String(err))}</div>`;
+      `<div class="empty-report">Unable to load beneficiaries: ${esc(err.message || String(err))}</div>`;
   }
 }
 
@@ -2829,7 +2972,7 @@ function renderPmReportContent(){
     <td class="c-status">${esc(x['Status of A/c Opening'] || '')}</td>
     <td class="c-reason">${esc(x['Reason if No'] || '')}</td>
   </tr>`).join('') :
-    `<tr><td class="c-sn">1</td><td class="c-village"></td><td class="c-name"></td><td class="c-gender"></td><td class="c-mobile"></td><td class="c-status"></td><td class="c-reason">No farmer-level records in this browser. Upload the PM-KISAN CSV here (same website URL). Local file and GitHub Pages keep separate storage — data uploaded on one will not appear on the other.</td></tr>`;
+    `<tr><td class="c-sn">1</td><td class="c-village"></td><td class="c-name"></td><td class="c-gender"></td><td class="c-mobile"></td><td class="c-status"></td><td class="c-reason">No farmer-level records from Google Sheet or local cache. Deploy Code.gs and re-upload PM-KISAN CSV so PMKISAN_Farmers is filled (also caches locally).</td></tr>`;
 
   $('pmReportContent').innerHTML = `
     <div class="pm-annexure-title">Annexure for PM Kisan Samman Nidhi</div>
@@ -3565,12 +3708,12 @@ async function moOnOfficeChange(){
     return;
   }
   try {
-    const keys = mappedVillageKeysForOffice(row);
-    let records = await pmGetBeneficiariesForVillages(keys);
     const editKey = String(row.officeId || row.officeName || '');
+    const loaded = await loadBeneficiariesForOffice(row);
+    let records = loaded.records || [];
     const edits = await offlineKvGet('bachatEdits:' + editKey) || {};
     records = records.map(r => {
-      const fp = pmBeneficiaryFingerprint(r);
+      const fp = r.fingerprint || pmBeneficiaryFingerprint(r);
       const e = edits[fp] || {};
       return Object.assign({}, r, {
         fingerprint: fp,
@@ -3583,11 +3726,11 @@ async function moOnOfficeChange(){
       Number(a['Sr. No'] || 0) - Number(b['Sr. No'] || 0) ||
       String(a['Farmer Name'] || '').localeCompare(String(b['Farmer Name'] || ''))
     );
-    // Assign display serial 1..n for annexure order
     moBeneficiaryList = records.map((r, i) => Object.assign({}, r, { __annexureSr: i + 1 }));
+    const src = loaded.source === 'google_sheet' ? 'Google Sheet' : (loaded.source.indexOf('local') >= 0 ? 'local cache' : 'source');
     $('moEntryStatus').textContent = moBeneficiaryList.length
-      ? (moBeneficiaryList.length.toLocaleString() + ' beneficiaries loaded — enter Sr. No.')
-      : 'No beneficiaries in cache for this office. Upload PM-KISAN CSV on this device and map villages.';
+      ? (moBeneficiaryList.length.toLocaleString() + ' beneficiaries from ' + src + ' — enter Sr. No.')
+      : 'No beneficiaries found. Deploy Code.gs, re-upload PM-KISAN CSV, and map villages.';
   } catch (err) {
     $('moEntryStatus').textContent = 'Failed to load beneficiaries: ' + (err.message || String(err));
   }
@@ -3889,30 +4032,74 @@ async function openBachatReport(row){
   $('bachatReportDate').value = d;
   $('bachatReportTitle').textContent = 'Annexure · Information for Special Drive - Oct -26';
   $('bachatReportSub').textContent = `${row.division} • ${row.subDivision} • ${row.officeName}`;
-  $('bachatReportContent').innerHTML = '<div class="empty-report">Loading beneficiary details…</div>';
+  $('bachatReportContent').innerHTML = '<div class="empty-report">Loading beneficiaries (Google Sheet → local cache)…</div>';
   $('bachatReportModal').classList.add('open');
 
   try {
-    const keys = mappedVillageKeysForOffice(row);
-    let records = await pmGetBeneficiariesForVillages(keys);
-    // Merge any previously saved drive edits from local cache
+    try { if (!(PMKISAN.rows || []).length) await loadPmkisanSummary(); } catch(_e){}
+    try { if (!(BACHAT_DRIVE.rows || []).length) await loadBachatDriveData(); } catch(_e){}
+
+    // 1) Google Sheet first → cached to local DB
+    const loaded = await loadBeneficiariesForOffice(row);
+    let records = loaded.records || [];
+
+    // 2) Merge Special Drive edits from sheet / local
+    const officeId = String(row.officeId || '').trim();
+    const officeNameLc = String(row.officeName || '').trim().toLowerCase();
+    const driveRows = (BACHAT_DRIVE.rows || []).filter(r => {
+      const id = String(r.officeId || '').trim();
+      const name = String(r.officeName || '').trim().toLowerCase();
+      return (officeId && id && id === officeId) || (officeNameLc && name && name === officeNameLc);
+    });
+    const byFp = new Map();
+    records.forEach(r => {
+      const fp = r.fingerprint || pmBeneficiaryFingerprint(r);
+      if (!fp) return;
+      byFp.set(fp, Object.assign({}, r, { fingerprint: fp }));
+    });
+    driveRows.forEach(r => {
+      const base = {
+        Village: r.Village || r.village || '',
+        'Farmer Name': r['Farmer Name'] || r.farmer_name || '',
+        Gender: r.Gender || r.gender || '',
+        'Sr. No': r['Sr. No'] || r.sr_no || '',
+        'Mobile No': r['Mobile No'] || r.mobile || '',
+        'Status of A/c Opening': r['Status of A/c Opening'] || r.account_status || '',
+        'Reason if No': r['Reason if No'] || r.reason || ''
+      };
+      const fp = r.fingerprint || pmBeneficiaryFingerprint(base);
+      if (!fp) return;
+      const prev = byFp.get(fp) || base;
+      byFp.set(fp, Object.assign({}, prev, {
+        fingerprint: fp,
+        Village: prev.Village || base.Village,
+        'Farmer Name': prev['Farmer Name'] || base['Farmer Name'],
+        Gender: prev.Gender || base.Gender,
+        'Sr. No': prev['Sr. No'] || base['Sr. No'],
+        'Mobile No': base['Mobile No'] || prev['Mobile No'] || '',
+        'Status of A/c Opening': base['Status of A/c Opening'] || prev['Status of A/c Opening'] || '',
+        'Reason if No': base['Reason if No'] || prev['Reason if No'] || ''
+      }));
+    });
+
     const edits = await offlineKvGet('bachatEdits:' + key) || {};
-    records = records.map(r => {
-      const fp = pmBeneficiaryFingerprint(r);
+    records = [...byFp.values()].map(r => {
+      const fp = r.fingerprint || pmBeneficiaryFingerprint(r);
       const e = edits[fp] || {};
       return Object.assign({}, r, {
         fingerprint: fp,
-        'Mobile No': e.mobile != null ? e.mobile : (r['Mobile No'] || ''),
-        'Status of A/c Opening': e.account_status != null ? e.account_status : (r['Status of A/c Opening'] || ''),
-        'Reason if No': e.reason != null ? e.reason : (r['Reason if No'] || '')
+        'Mobile No': e.mobile != null && e.mobile !== '' ? e.mobile : (r['Mobile No'] || ''),
+        'Status of A/c Opening': e.account_status != null && e.account_status !== '' ? e.account_status : (r['Status of A/c Opening'] || ''),
+        'Reason if No': e.reason != null && e.reason !== '' ? e.reason : (r['Reason if No'] || '')
       });
     });
     records.sort((a,b) =>
-      String(a.Village).localeCompare(String(b.Village)) ||
+      String(a.Village || '').localeCompare(String(b.Village || '')) ||
       Number(a['Sr. No']||0) - Number(b['Sr. No']||0) ||
-      String(a['Farmer Name']).localeCompare(String(b['Farmer Name']))
+      String(a['Farmer Name'] || '').localeCompare(String(b['Farmer Name'] || ''))
     );
     activeBachatReport.records = records;
+    activeBachatReport._source = loaded.source;
     renderBachatReportContent();
   } catch (err) {
     $('bachatReportContent').innerHTML =
@@ -3946,7 +4133,7 @@ function renderBachatReportContent(){
       <td class="c-reason"><input type="text" data-field="reason" value="${esc(x['Reason if No']||'')}" placeholder="Reason if No"></td>
     </tr>`;
   }).join('') :
-    `<tr><td colspan="6" class="empty-report">No farmer-level records in browser cache for mapped villages of this BPO. Upload PM-KISAN CSV on this device (or ensure villages are mapped).</td></tr>`;
+    `<tr><td colspan="6" class="empty-report">No farmer-level records from Google Sheet or local cache. Deploy Code.gs, re-upload PM-KISAN CSV (fills PMKISAN_Farmers), and ensure villages are mapped.</td></tr>`;
 
   $('bachatReportContent').innerHTML = `
     <div class="pm-annexure-title">Annexure for PM Kisan Samman Nidhi · Information for Special Drive - Oct -26</div>
