@@ -253,6 +253,23 @@ html,body{width:100%;overflow-x:hidden}
   .mo-submit-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
   @media(max-width:700px){.mo-form-grid{grid-template-columns:1fr}}
 
+
+  .tree-row[style*="cursor:pointer"]{cursor:pointer}
+  .tree-row .chevron{display:inline-block;width:14px;font-weight:900;color:#12385b;margin-right:4px}
+  .tree-row .tree-name{font-weight:700}
+  .tree-row.level-1 .tree-name{font-weight:650}
+  .tree-row.level-2 .tree-name{font-weight:600}
+  .tree-row.level-3 .tree-name{font-weight:500}
+  .tree-indent.l0{padding-left:4px}
+  .tree-indent.l1{padding-left:22px}
+  .tree-indent.l2{padding-left:40px}
+  .tree-indent.l3{padding-left:58px}
+  .tree-row.level-0{background:#f8fafc}
+  .tree-row:hover{background:#eef6ff}
+  .pm-annexure .c-village{width:16%}
+  .pm-annexure .c-name{width:22%}
+  .pm-annexure .c-sn{width:6%}
+
 </style>
 </head>
 <body>
@@ -365,7 +382,7 @@ html,body{width:100%;overflow-x:hidden}
       <div class="dashboard-titlebar" style="margin-bottom:8px">
         <div>
           <h2 style="margin:0">Division wise Position</h2>
-          <div class="filter-note">Click the arrow in a row to expand the next level.</div>
+          <div class="filter-note">Click ▸ in a row to expand: Division → Sub Division → SO Name → Office Name. Click ▾ to collapse.</div>
         </div>
         <div class="report-actions">
           <button class="excel-btn" onclick="exportPositionExcel()">▣ Excel</button>
@@ -536,6 +553,9 @@ html,body{width:100%;overflow-x:hidden}
       </div>
     </div>
 
+    <div style="display:flex;justify-content:flex-end;margin:4px 0 6px">
+      <button class="secondary" style="font-size:11px;padding:6px 10px" onclick="resetBachatDriveLocalStats()">↺ Reset filled / Yes / No KPIs to 0</button>
+    </div>
     <div class="bachat-drive-kpis" id="bachatDriveKpis" aria-label="Special Drive KPIs">
       <div class="kpi" data-bachat-kpi="offices" onclick="openBachatKpiModal('offices')">
         <div class="num" id="bkpiOffices">0</div>
@@ -1842,7 +1862,7 @@ function buildHierarchy(offices){
     if(!son){ son = {level:2, name:so, key:'so|'+d+'|'+s+'|'+so, children:[], offices:0, mapped:0, beneficiaries:0}; sn.children.push(son); }
     son.offices++; son.mapped += mapped ? 1 : 0; son.beneficiaries += bc;
     son.children.push({
-      level:3, name: office.officeName || '—', key:'o|'+String(office.officeId),
+      level:3, name: office.officeName || '—', key:'o|'+String(office.officeId||office.officeName||Math.random()),
       children:[], offices:1, mapped: mapped ? 1 : 0, beneficiaries: bc,
       officeId: office.officeId, officeType: office.officeType
     });
@@ -1862,65 +1882,125 @@ function buildHierarchy(offices){
 
 function pctClass(p){ return p >= 100 ? 'percent-good' : p > 0 ? 'percent-mid' : 'percent-zero'; }
 
-function hierarchyRow(node, parentKey){
-  const p = node.offices ? node.mapped * 100 / node.offices : 0;
-  const has = node.children && node.children.length;
-  const expanded = window.__expandedHierarchy?.has(node.key);
-  const indent = 'l' + Math.min(node.level, 3);
-  const benef = Number(node.beneficiaries || 0);
-  const label = node.level === 3
-    ? `${esc(node.name)} <span class="count-badge">${esc(node.officeType || 'Delivery Office')}</span>`
-    : `<span class="chevron">${has ? (expanded ? '−' : '+') : ''}</span> ${esc(node.name)} <span class="count-badge">${node.children.length.toLocaleString()} ${node.level===0?'Sub Div.':node.level===1?'SO':node.level===2?'Offices':''}</span>`;
-  return `<tr class="tree-row level-${node.level}" data-tree-key="${esc(node.key)}" data-parent-key="${esc(parentKey||'')}" data-level="${node.level}" onclick="toggleHierarchyRow(event,'${esc(node.key)}')">
-    <td class="tree-cell"><span class="tree-indent ${indent}">${node.level===3?'<span class="leaf">•</span>':label}</span>${node.level===3?label:''}</td>
-    <td class="num">${node.offices.toLocaleString()}</td>
-    <td class="num status-num status-mapped">${node.mapped.toLocaleString()}</td>
-    <td class="num status-num" style="color:#0f766e;font-weight:800">${benef.toLocaleString()}</td>
-    <td class="num status-num status-pending">${(node.offices-node.mapped).toLocaleString()}</td>
-    <td class="num ${pctClass(p)}">${p.toFixed(2)}%</td>
-  </tr>`;
-}
-
 function flattenVisibleHierarchy(root){
   const out = [];
-  function walk(nodes, parentKey=''){
-    nodes.forEach(n => {
-      out.push({node:n, parentKey});
-      if(window.__expandedHierarchy?.has(n.key) && n.children?.length) walk(n.children, n.key);
+  function walk(nodes, parentKey){
+    (nodes || []).forEach(n => {
+      out.push({ node: n, parentKey: parentKey || '' });
+      if (window.__expandedHierarchy && window.__expandedHierarchy.has(n.key) && n.children && n.children.length) {
+        walk(n.children, n.key);
+      }
     });
   }
-  walk(root.children);
+  walk(root.children || [], '');
   return out;
 }
 
 function renderHierarchy(offices){
-  if(!window.__expandedHierarchy) window.__expandedHierarchy = new Set();
-  const root = buildHierarchy(offices);
+  if (!window.__expandedHierarchy) window.__expandedHierarchy = new Set();
+  const list = Array.isArray(offices) ? offices : officesForFilters();
+  const root = buildHierarchy(list);
   const visible = flattenVisibleHierarchy(root);
-  $('dashboardBody').innerHTML = visible.length
+  let html = visible.length
     ? visible.map(x => hierarchyRow(x.node, x.parentKey)).join('')
     : '<tr><td colspan="6" class="empty">No records for selected filters.</td></tr>';
+
+  // TOTAL row for current filter
+  if (list && list.length) {
+    const statuses = buildOfficeStatus(list);
+    const totalOff = list.length;
+    const totalMapped = statuses.filter(x => x.mapped).length;
+    const totalPending = totalOff - totalMapped;
+    const pct = totalOff ? (totalMapped * 100 / totalOff) : 0;
+    const benefMap = typeof beneficiaryByOfficeMap === 'function' ? beneficiaryByOfficeMap() : new Map();
+    let totalBenef = 0;
+    list.forEach(o => {
+      totalBenef += typeof officeBeneficiaryCount === 'function' ? officeBeneficiaryCount(o, benefMap) : 0;
+    });
+    html += '<tr class="tree-row level-0" style="background:#edf4fb;font-weight:800">' +
+      '<td class="tree-cell"><span class="tree-indent">TOTAL</span></td>' +
+      '<td class="num">' + totalOff.toLocaleString() + '</td>' +
+      '<td class="num status-num status-mapped">' + totalMapped.toLocaleString() + '</td>' +
+      '<td class="num status-num" style="color:#0f766e;font-weight:800">' + totalBenef.toLocaleString() + '</td>' +
+      '<td class="num status-num status-pending">' + totalPending.toLocaleString() + '</td>' +
+      '<td class="num ' + pctClass(pct) + '">' + pct.toFixed(2) + '%</td>' +
+    '</tr>';
+  }
+  const body = document.getElementById('dashboardBody');
+  if (body) body.innerHTML = html;
+}
+
+function hierarchyRow(node, parentKey){
+  const p = node.offices ? node.mapped * 100 / node.offices : 0;
+  const has = !!(node.children && node.children.length);
+  const expanded = !!(window.__expandedHierarchy && window.__expandedHierarchy.has(node.key));
+  const level = Number(node.level || 0);
+  const isOffice = level >= 3;
+  const benef = Number(node.beneficiaries || 0);
+
+  let badge = '';
+  if (!isOffice && has) {
+    const childLabel = level === 0 ? 'Sub Div.' : (level === 1 ? 'SO' : 'Offices');
+    badge = ' <span class="count-badge">' + node.children.length.toLocaleString() + ' ' + childLabel + '</span>';
+  } else if (isOffice) {
+    badge = ' <span class="count-badge">' + esc(node.officeType || 'Delivery Office') + '</span>';
+  }
+
+  let chevron = '';
+  if (!isOffice && has) {
+    chevron = '<span class="chevron" aria-hidden="true">' + (expanded ? '\u25BE' : '\u25B8') + '</span> ';
+  } else if (isOffice) {
+    chevron = '<span class="leaf">\u2022</span> ';
+  }
+
+  const safeKey = String(node.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const clickAttr = (!isOffice && has)
+    ? "onclick=\"toggleHierarchyRow(event,'" + safeKey + "')\" style=\"cursor:pointer\""
+    : '';
+
+  return '<tr class="tree-row level-' + level + '" data-tree-key="' + esc(node.key) + '" data-parent-key="' + esc(parentKey||'') + '" data-level="' + level + '" ' + clickAttr + '>' +
+    '<td class="tree-cell"><span class="tree-indent l' + Math.min(level,3) + '">' + chevron + '<span class="tree-name">' + esc(node.name) + '</span>' + badge + '</span></td>' +
+    '<td class="num">' + Number(node.offices||0).toLocaleString() + '</td>' +
+    '<td class="num status-num status-mapped">' + Number(node.mapped||0).toLocaleString() + '</td>' +
+    '<td class="num status-num" style="color:#0f766e;font-weight:700">' + benef.toLocaleString() + '</td>' +
+    '<td class="num status-num status-pending">' + Number((node.offices||0)-(node.mapped||0)).toLocaleString() + '</td>' +
+    '<td class="num ' + pctClass(p) + '">' + p.toFixed(2) + '%</td>' +
+  '</tr>';
 }
 
 function toggleHierarchyRow(ev, key){
-  ev.stopPropagation();
-  const rows = [...document.querySelectorAll('#dashboardBody tr')];
-  const target = rows.find(r => r.dataset.treeKey === key);
-  if(!target) return;
-  const nodeLevel = Number(target.dataset.level);
-  if(nodeLevel >= 3) return;
-  if(!window.__expandedHierarchy) window.__expandedHierarchy = new Set();
-  if(window.__expandedHierarchy.has(key)) {
-    const prefix = key.split('|').slice(0, nodeLevel + 1).join('|');
-    [...window.__expandedHierarchy].forEach(k => {
-      if(k !== key && k.startsWith(prefix)) window.__expandedHierarchy.delete(k);
-    });
+  if (ev) {
+    ev.stopPropagation();
+    ev.preventDefault();
+  }
+  if (!key) return;
+  if (!window.__expandedHierarchy) window.__expandedHierarchy = new Set();
+
+  if (window.__expandedHierarchy.has(key)) {
     window.__expandedHierarchy.delete(key);
+    const parts = key.split('|');
+    [...window.__expandedHierarchy].forEach(k => {
+      if (k.startsWith(key + '|')) {
+        window.__expandedHierarchy.delete(k);
+        return;
+      }
+      if (parts[0] === 'd' && parts.length >= 2) {
+        const div = parts.slice(1).join('|');
+        if (k.startsWith('s|' + div + '|') || k.startsWith('so|' + div + '|')) {
+          window.__expandedHierarchy.delete(k);
+        }
+      }
+      if (parts[0] === 's' && parts.length >= 3) {
+        const path = parts.slice(1).join('|');
+        if (k.startsWith('so|' + path + '|')) window.__expandedHierarchy.delete(k);
+      }
+    });
   } else {
     window.__expandedHierarchy.add(key);
   }
   renderHierarchy(officesForFilters());
 }
+
 
 /* ---------- KPI detail popup ---------- */
 let activeKpiKey = '';
@@ -1998,7 +2078,12 @@ function openKpiModal(key){
   $('kpiModal').classList.add('open');
 }
 
-function closeKpiModal(){ $('kpiModal').classList.remove('open'); window.__bachatKpiExport = false; }
+function closeKpiModal(){
+  $('kpiModal').classList.remove('open');
+  window.__bachatKpiExport = false;
+  const bar = document.getElementById('bachatKpiEditBar');
+  if (bar) bar.style.display = 'none';
+}
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){ closeKpiModal(); closePmReport(); closeBachatReport(); closeMoEntryModal(); }
 });
@@ -2294,23 +2379,61 @@ async function pmSaveChunkToLocal(fileName, chunkNo, records){
 async function pmGetBeneficiariesForVillages(villageKeys){
   const keys = [...new Set(villageKeys.map(pmNormVillage).filter(Boolean))];
   if(!keys.length) return [];
+  const keySet = new Set(keys);
   const db = await pmOpenDb();
   return new Promise((resolve) => {
     const tx = db.transaction('beneficiaries', 'readonly');
-    const idx = tx.objectStore('beneficiaries').index('villageKey');
+    const store = tx.objectStore('beneficiaries');
     const out = [];
-    let pending = keys.length;
-    if(!pending){ db.close(); resolve([]); return; }
-    keys.forEach(key => {
-      const req = idx.getAll(key);
+    const seen = new Set();
+
+    function pushRows(rows){
+      (rows || []).forEach(r => {
+        const id = r.id != null ? 'id:' + r.id : (r.fingerprint || (r['Farmer Name'] + '|' + r.Village + '|' + r['Sr. No']));
+        if (seen.has(id)) return;
+        const vk = pmNormVillage(r.villageKey || r.Village || '');
+        if (!keySet.has(vk)) return;
+        seen.add(id);
+        out.push(r);
+      });
+    }
+
+    // Prefer index lookup
+    if (store.indexNames.contains('villageKey')) {
+      const idx = store.index('villageKey');
+      let pending = keys.length;
+      if (!pending) { resolve([]); return; }
+      keys.forEach(key => {
+        const req = idx.getAll(key);
+        req.onsuccess = () => {
+          pushRows(req.result);
+          if (--pending === 0) finish();
+        };
+        req.onerror = () => { if (--pending === 0) finish(); };
+      });
+    } else {
+      finishScan();
+    }
+
+    function finishScan(){
+      // Full scan fallback (handles missing index / key mismatches)
+      const req = store.getAll();
       req.onsuccess = () => {
-        out.push(...(req.result || []));
-        if(--pending === 0){ db.close(); resolve(out); }
+        pushRows(req.result);
+        try { db.close(); } catch(_e){}
+        resolve(out);
       };
-      req.onerror = () => {
-        if(--pending === 0){ db.close(); resolve(out); }
-      };
-    });
+      req.onerror = () => { try { db.close(); } catch(_e){} resolve(out); };
+    }
+
+    function finish(){
+      if (out.length) {
+        try { db.close(); } catch(_e){}
+        resolve(out);
+      } else {
+        finishScan();
+      }
+    }
   });
 }
 
@@ -2638,18 +2761,31 @@ let activePmReport = {row:null, records:[], date:''};
 
 function mappedVillageKeysForOffice(row){
   const officeId = String(row?.officeId ?? '').trim();
-  const officeName = String(row?.officeName ?? '').trim();
+  const officeName = String(row?.officeName ?? '').trim().toLowerCase();
   const division = String(row?.division ?? '').trim();
   const subDivision = String(row?.subDivision ?? '').trim();
   const soName = String(row?.soName ?? '').trim();
-  return (DATA.villages || []).filter(v => {
-    if(!v.mapped) return false;
-    if(officeId) return String(v.officeId ?? '').trim() === officeId;
-    return String(v.officeName ?? '').trim() === officeName &&
-      (!division || String(v.division ?? '').trim() === division) &&
-      (!subDivision || String(v.subDivision ?? '').trim() === subDivision) &&
-      (!soName || String(v.soName ?? '').trim() === soName);
-  }).map(v => v.village);
+  const villages = DATA.villages || [];
+  let matched = villages.filter(v => {
+    if (!v.mapped) return false;
+    if (officeId && String(v.officeId ?? '').trim() === officeId) return true;
+    return false;
+  });
+  if (!matched.length && officeName) {
+    matched = villages.filter(v => {
+      if (!v.mapped) return false;
+      const vn = String(v.officeName ?? '').trim().toLowerCase();
+      if (vn !== officeName) return false;
+      if (division && String(v.division ?? '').trim() && String(v.division ?? '').trim() !== division) return false;
+      if (soName && String(v.soName ?? '').trim() && String(v.soName ?? '').trim() !== soName) return false;
+      return true;
+    });
+  }
+  // Also include villages listed on PM-KISAN summary row if present
+  if (Array.isArray(row?.villages)) {
+    row.villages.forEach(v => matched.push({ village: v, mapped: true }));
+  }
+  return [...new Set(matched.map(v => v.village).filter(Boolean))];
 }
 
 async function openPmReport(row){
@@ -2661,7 +2797,11 @@ async function openPmReport(row){
   $('pmReportModal').classList.add('open');
   try {
     const keys = mappedVillageKeysForOffice(row);
-    const records = await pmGetBeneficiariesForVillages(keys);
+    let records = await pmGetBeneficiariesForVillages(keys);
+    if (!records.length) {
+      const altKeys = (DATA.villages || []).filter(v => v.mapped && ((row.officeId && String(v.officeId) === String(row.officeId)) || (row.officeName && String(v.officeName||'').toLowerCase() === String(row.officeName||'').toLowerCase()))).map(v => v.village);
+      records = await pmGetBeneficiariesForVillages(altKeys);
+    }
     records.sort((a,b) =>
       String(a.Village).localeCompare(String(b.Village)) ||
       Number(a['Sr. No'] || 0) - Number(b['Sr. No'] || 0) ||
@@ -2682,13 +2822,14 @@ function renderPmReportContent(){
   const displayDate = driveDate ? new Date(driveDate + 'T00:00:00').toLocaleDateString('en-IN') : '';
   const rows = records.length ? records.map((x, i) => `<tr>
     <td class="c-sn">${i+1}</td>
-    <td class="c-name">${esc(x['Farmer Name'] || '')}</td>
+    <td class="c-village">${esc(x.Village||x.village||'')}</td>
+      <td class="c-name">${esc(x['Farmer Name'] || '')}</td>
     <td class="c-gender">${esc(x.Gender || '')}</td>
     <td class="c-mobile">${esc(x['Mobile No'] || '')}</td>
     <td class="c-status">${esc(x['Status of A/c Opening'] || '')}</td>
     <td class="c-reason">${esc(x['Reason if No'] || '')}</td>
   </tr>`).join('') :
-    `<tr><td class="c-sn">1</td><td class="c-name"></td><td class="c-gender"></td><td class="c-mobile"></td><td class="c-status"></td><td class="c-reason">No farmer-level records in browser cache. Re-upload the PM-KISAN CSV on this device to populate the detailed annexure.</td></tr>`;
+    `<tr><td class="c-sn">1</td><td class="c-village"></td><td class="c-name"></td><td class="c-gender"></td><td class="c-mobile"></td><td class="c-status"></td><td class="c-reason">No farmer-level records in this browser. Upload the PM-KISAN CSV here (same website URL). Local file and GitHub Pages keep separate storage — data uploaded on one will not appear on the other.</td></tr>`;
 
   $('pmReportContent').innerHTML = `
     <div class="pm-annexure-title">Annexure for PM Kisan Samman Nidhi</div>
@@ -2702,13 +2843,14 @@ function renderPmReportContent(){
       <thead>
         <tr>
           <th class="c-sn">S.No.</th>
+          <th class="c-village">Village Name</th>
           <th class="c-name">Farmer Name</th>
           <th class="c-gender">Gender</th>
           <th class="c-mobile">Mobile No</th>
           <th class="c-status">Status of A/c Opening</th>
           <th class="c-reason">Reason if No</th>
         </tr>
-        <tr><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>
+        <tr><th></th><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -2721,14 +2863,14 @@ function closePmReport(){ $('pmReportModal').classList.remove('open'); }
 
 function pmReportTableHtml(records){
   return records.map((x, i) =>
-    `<tr><td>${i+1}</td><td>${esc(x['Farmer Name']||'')}</td><td>${esc(x.Gender||'')}</td><td>${esc(x['Mobile No']||'')}</td><td>${esc(x['Status of A/c Opening']||'')}</td><td>${esc(x['Reason if No']||'')}</td></tr>`
+    `<tr><td>${i+1}</td><td>${esc(x.Village||x.village||'')}</td><td>${esc(x['Farmer Name']||'')}</td><td>${esc(x.Gender||'')}</td><td>${esc(x['Mobile No']||'')}</td><td>${esc(x['Status of A/c Opening']||'')}</td><td>${esc(x['Reason if No']||'')}</td></tr>`
   ).join('');
 }
 
 function pmReportExportDocument(row, records){
   const date = $('pmReportDate')?.value || new Date().toISOString().slice(0,10);
   const displayDate = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-IN') : '';
-  const head = '<tr><th>S.No.</th><th>Farmer Name</th><th>Gender</th><th>Mobile No</th><th>Status of A/c Opening</th><th>Reason if No</th></tr>';
+  const head = '<tr><th>S.No.</th><th>Village Name</th><th>Farmer Name</th><th>Gender</th><th>Mobile No</th><th>Status of A/c Opening</th><th>Reason if No</th></tr>';
   const body = pmReportTableHtml(records);
   return `<!doctype html><html><head><meta charset="UTF-8"><title>Annexure for PM Kisan Samman Nidhi</title>
   <style>body{font-family:Arial,sans-serif;margin:18px;color:#111}h1{text-align:center;font-size:20px;font-style:italic;margin:0 0 7px}
@@ -2748,8 +2890,8 @@ function pmReportExportDocument(row, records){
     <tr><td>BO Name</td><td>${esc(row.officeName||'')}</td></tr>
     <tr><td>Date of Drive</td><td>${esc(displayDate)}</td></tr>
   </table>
-  <table><thead>${head}<tr><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr></thead>
-  <tbody>${body || '<tr><td colspan="6">No beneficiary records available.</td></tr>'}</tbody></table></body></html>`;
+  <table><thead>${head}<tr><th></th><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr></thead>
+  <tbody>${body || '<tr><td colspan="7">No beneficiary records available.</td></tr>'}</tbody></table></body></html>`;
 }
 
 function downloadCurrentPmReportExcel(){
@@ -2765,7 +2907,7 @@ function exportCurrentPmReportPDF(){
   const displayDate = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-IN') : '';
   const r = activePmReport.row, records = activePmReport.records || [];
   const head = `<tr><th>S.No.</th><th>Farmer Name</th><th>Gender</th><th>Mobile No</th><th>Status of A/c Opening</th><th>Reason if No</th></tr>
-    <tr><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>`;
+    <tr><th></th><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>`;
   const body = pmReportTableHtml(records);
   const w = window.open('', '_blank', 'width=1200,height=800');
   if(!w) return;
@@ -2789,7 +2931,7 @@ function exportCurrentPmReportPDF(){
     <tr><td>Date of Drive</td><td>${esc(displayDate)}</td></tr>
   </table>
   <table class="data"><thead>${head}</thead>
-  <tbody>${body || '<tr><td colspan="6">No beneficiary records available.</td></tr>'}</tbody></table>
+  <tbody>${body || '<tr><td colspan="7">No beneficiary records available.</td></tr>'}</tbody></table>
   <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
   w.document.close();
 }
@@ -3029,12 +3171,120 @@ function driveRowsForFilteredOffices(){
   const ids = new Set(offices.map(o => String(o.officeId || '').trim()).filter(Boolean));
   const names = new Set(offices.map(o => String(o.officeName || '').trim().toLowerCase()).filter(Boolean));
   return (BACHAT_DRIVE.rows || []).filter(r => {
+    // Ignore incomplete / placeholder rows
+    const mobile = String(r.mobile || '').trim();
+    const status = String(r.account_status || '').trim();
+    const farmer = String(r.farmer_name || r['Farmer Name'] || '').trim();
+    const fp = String(r.fingerprint || '').trim();
+    if (!fp && !farmer && !mobile && !status) return false;
+
     const id = String(r.officeId || '').trim();
     const name = String(r.officeName || '').trim().toLowerCase();
+    // Must belong to a filtered selected BPO
     if (id && ids.has(id)) return true;
     if (name && names.has(name)) return true;
     return false;
   });
+}
+
+/** Reset local drive KPI cache (filled / Yes / No back to 0 until real MO entry). */
+
+async function saveBachatKpiEdits(){
+  if (!window.__bachatKpiExport || !activeBachatKpi) {
+    toast('Open a Special Drive KPI list first.', false);
+    return;
+  }
+  const trs = [...document.querySelectorAll('#kpiModalBody tr[data-fp]')];
+  if (!trs.length) {
+    toast('No editable rows.', false);
+    return;
+  }
+  const byOffice = new Map();
+  trs.forEach(tr => {
+    const fp = tr.getAttribute('data-fp') || '';
+    const officeId = tr.getAttribute('data-office-id') || '';
+    const officeName = tr.getAttribute('data-office-name') || '';
+    const mobile = tr.querySelector('[data-field="mobile"]')?.value || '';
+    const account_status = tr.querySelector('[data-field="account_status"]')?.value || '';
+    const reason = tr.querySelector('[data-field="reason"]')?.value || '';
+    const key = officeId || officeName || 'unknown';
+    if (!byOffice.has(key)) byOffice.set(key, { officeId, officeName, records: [] });
+    byOffice.get(key).records.push({
+      fingerprint: fp,
+      'Mobile No': mobile,
+      mobile,
+      'Status of A/c Opening': account_status,
+      account_status,
+      'Reason if No': reason,
+      reason
+    });
+  });
+
+  let ok = 0, fail = 0;
+  for (const [, pack] of byOffice) {
+    const payload = {
+      action: 'bachat_save',
+      officeId: pack.officeId,
+      officeName: pack.officeName,
+      driveDate: new Date().toISOString().slice(0,10),
+      records: pack.records
+    };
+    // local edits
+    const lok = String(pack.officeId || pack.officeName || '');
+    try {
+      const edits = (await offlineKvGet('bachatEdits:' + lok)) || {};
+      pack.records.forEach(r => {
+        if (!r.fingerprint) return;
+        edits[r.fingerprint] = {
+          mobile: r.mobile,
+          account_status: r.account_status,
+          reason: r.reason
+        };
+      });
+      await offlineKvSet('bachatEdits:' + lok, edits);
+    } catch(_e){}
+
+    try {
+      if (!navigator.onLine) {
+        await offlineQueueAdd({ type: 'bachat_save', payload });
+        ok++;
+        continue;
+      }
+      await new Promise((resolve, reject) => {
+        const callback = 'kpiSave_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        const script = document.createElement('script');
+        const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 45000);
+        function cleanup(){ clearTimeout(timer); delete window[callback]; script.remove(); }
+        window[callback] = (res) => { cleanup(); if (res && res.ok) resolve(res); else reject(new Error((res&&res.message)||'fail')); };
+        script.onerror = () => { cleanup(); reject(new Error('unreachable')); };
+        script.src = API_URL + '?api=bachat_save&callback=' + encodeURIComponent(callback) +
+          '&payload=' + encodeURIComponent(JSON.stringify(payload));
+        document.body.appendChild(script);
+      });
+      ok++;
+    } catch (err) {
+      try { await offlineQueueAdd({ type: 'bachat_save', payload }); ok++; }
+      catch(_e){ fail++; }
+    }
+  }
+  toast(fail ? `Saved with issues (ok ${ok}, fail ${fail})` : `Successfully updated ${ok} office group(s) in Google Sheet.`, !fail);
+  await loadBachatDriveData();
+  updateBachatDriveKpis();
+}
+
+async function resetBachatDriveLocalStats(){
+  BACHAT_DRIVE = { ok: true, rows: [], filled: 0, yes: 0, no: 0 };
+  try { await offlineKvSet('bachatDriveList', BACHAT_DRIVE); } catch(_e){}
+  // Clear per-office local edits
+  const offices = BACHAT.rows || [];
+  for (const o of offices) {
+    const key = String(o.officeId || o.officeName || '');
+    if (key) {
+      try { await offlineKvSet('bachatEdits:' + key, {}); } catch(_e){}
+    }
+  }
+  updateBachatDriveKpis();
+  toast('Drive KPI stats reset to 0. Enter data via MO form to fill again.', true);
 }
 
 function updateBachatDriveKpis(){
@@ -3043,7 +3293,9 @@ function updateBachatDriveKpis(){
   const drive = driveRowsForFilteredOffices();
   let filled = 0, yes = 0, no = 0;
   drive.forEach(r => {
-    if (String(r.mobile || '').trim()) filled++;
+    const mobile = String(r.mobile || '').trim();
+    // count filled only if mobile looks real (at least 8 digits)
+    if (mobile && mobile.replace(/\D/g, '').length >= 8) filled++;
     const st = String(r.account_status || '').trim().toLowerCase();
     if (st === 'yes' || st === 'y') yes++;
     else if (st === 'no' || st === 'n') no++;
@@ -3091,15 +3343,19 @@ function openBachatKpiModal(key){
     title = labels[key] || key;
     head = '<tr><th>Division</th><th>Sub Division</th><th>Office</th><th>Village</th><th>Farmer Name</th><th>Mobile No</th><th>A/c Status</th><th>Reason</th><th>Drive Date</th></tr>';
     let list = drive;
-    if (key === 'filled') list = drive.filter(r => String(r.mobile||'').trim());
+    if (key === 'filled') list = drive.filter(r => {
+      const m = String(r.mobile||'').trim();
+      return m && m.replace(/\D/g,'').length >= 8;
+    });
     if (key === 'yes') list = drive.filter(r => { const s=String(r.account_status||'').toLowerCase(); return s==='yes'||s==='y'; });
     if (key === 'no') list = drive.filter(r => { const s=String(r.account_status||'').toLowerCase(); return s==='no'||s==='n'; });
-    // attach division from office list when possible
     const byId = new Map(offices.map(o => [String(o.officeId||''), o]));
     const byName = new Map(offices.map(o => [String(o.officeName||'').toLowerCase(), o]));
     rows = list.map(r => {
       const o = byId.get(String(r.officeId||'')) || byName.get(String(r.officeName||'').toLowerCase()) || {};
       return {
+        fingerprint: r.fingerprint || '',
+        officeId: r.officeId || o.officeId || '',
         division: o.division || '',
         subDivision: o.subDivision || '',
         officeName: r.officeName || o.officeName || '',
@@ -3111,7 +3367,37 @@ function openBachatKpiModal(key){
         drive_date: r.drive_date || ''
       };
     });
-    body = rows.map(r => `<tr><td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.officeName)}</td><td>${esc(r.village)}</td><td>${esc(r.farmer_name)}</td><td>${esc(r.mobile)}</td><td>${esc(r.account_status)}</td><td>${esc(r.reason)}</td><td>${esc(r.drive_date)}</td></tr>`).join('');
+    // Editable cells for MO corrections
+    body = rows.map((r, idx) => {
+      const st = String(r.account_status||'').toLowerCase();
+      const yesSel = (st==='yes'||st==='y') ? ' selected' : '';
+      const noSel = (st==='no'||st==='n') ? ' selected' : '';
+      return `<tr data-fp="${esc(r.fingerprint)}" data-office-id="${esc(r.officeId)}" data-office-name="${esc(r.officeName)}">
+        <td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.officeName)}</td>
+        <td>${esc(r.village)}</td><td>${esc(r.farmer_name)}</td>
+        <td><input type="text" data-field="mobile" value="${esc(r.mobile)}" style="width:110px;height:28px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px"></td>
+        <td><select data-field="account_status" style="height:28px;border:1px solid #cbd5e1;border-radius:6px">
+          <option value="">—</option>
+          <option value="Yes"${yesSel}>Yes</option>
+          <option value="No"${noSel}>No</option>
+        </select></td>
+        <td><input type="text" data-field="reason" value="${esc(r.reason)}" style="width:120px;height:28px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px"></td>
+        <td>${esc(r.drive_date)}</td>
+      </tr>`;
+    }).join('');
+    // Save button injected into modal foot area via flag
+    setTimeout(() => {
+      let bar = document.getElementById('bachatKpiEditBar');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'bachatKpiEditBar';
+        bar.style.cssText = 'margin:8px 0;display:flex;gap:8px;align-items:center';
+        const bodyEl = document.querySelector('#kpiModal .modal-body');
+        if (bodyEl) bodyEl.insertBefore(bar, bodyEl.firstChild);
+      }
+      bar.innerHTML = '<button class="primary" style="background:#0f766e" onclick="saveBachatKpiEdits()">💾 Save edits to Google Sheet</button><span style="font-size:11px;color:#667085">Edit Mobile / Status / Reason then Save</span>';
+      bar.style.display = 'flex';
+    }, 0);
   }
 
   activeBachatKpi = { key, title, rows, head, body };
@@ -3646,6 +3932,7 @@ function renderBachatReportContent(){
     const isNo = status === 'no' || status === 'n' || status === 'नहीं';
     return `<tr data-fp="${esc(x.fingerprint || '')}">
       <td class="c-sn">${i+1}</td>
+      <td class="c-village">${esc(x.Village||x.village||'')}</td>
       <td class="c-name">${esc(x['Farmer Name']||'')}</td>
       <td class="c-gender">${esc(x.Gender||'')}</td>
       <td class="c-mobile"><input type="text" data-field="mobile" value="${esc(x['Mobile No']||'')}" placeholder="Mobile"></td>
@@ -3673,13 +3960,14 @@ function renderBachatReportContent(){
       <thead>
         <tr>
           <th class="c-sn">S.No.</th>
+          <th class="c-village">Village Name</th>
           <th class="c-name">Farmer Name</th>
           <th class="c-gender">Gender</th>
           <th class="c-mobile">Mobile No</th>
           <th class="c-status">Status of A/c Opening</th>
           <th class="c-reason">Reason if No</th>
         </tr>
-        <tr><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>
+        <tr><th></th><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>
       </thead>
       <tbody>${body}</tbody>
     </table>`;
@@ -3900,9 +4188,9 @@ function exportBachatAnnexurePDF(){
   const r = activeBachatReport.row;
   const date = $('bachatReportDate').value || '';
   const displayDate = date ? new Date(date+'T00:00:00').toLocaleDateString('en-IN') : '';
-  const head = `<tr><th>S.No.</th><th>Farmer Name</th><th>Gender</th><th>Mobile No</th><th>Status of A/c Opening</th><th>Reason if No</th></tr><tr><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>`;
+  const head = `<tr><th>S.No.</th><th>Farmer Name</th><th>Gender</th><th>Mobile No</th><th>Status of A/c Opening</th><th>Reason if No</th></tr><tr><th></th><th></th><th></th><th></th><th></th><th>Yes/No</th><th></th></tr>`;
   const body = records.map((x,i) =>
-    `<tr><td>${i+1}</td><td>${esc(x['Farmer Name']||'')}</td><td>${esc(x.Gender||'')}</td><td>${esc(x['Mobile No']||'')}</td><td>${esc(x['Status of A/c Opening']||'')}</td><td>${esc(x['Reason if No']||'')}</td></tr>`
+    `<tr><td>${i+1}</td><td>${esc(x.Village||x.village||'')}</td><td>${esc(x['Farmer Name']||'')}</td><td>${esc(x.Gender||'')}</td><td>${esc(x['Mobile No']||'')}</td><td>${esc(x['Status of A/c Opening']||'')}</td><td>${esc(x['Reason if No']||'')}</td></tr>`
   ).join('');
   const w = window.open('','_blank','width=1200,height=800');
   if (!w) return;
