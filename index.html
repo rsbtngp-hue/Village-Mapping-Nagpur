@@ -153,7 +153,13 @@ html,body{width:100%;overflow-x:hidden}
 
 
   /* ===== PM-KISAN Beneficiary report ===== */
-  .pm-report-row{cursor:pointer}
+  .pm-report-row td{vertical-align:middle}
+  .pm-office-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+  .pm-office-actions button{padding:4px 8px;font-size:11px;border-radius:6px;cursor:pointer;border:0;font-weight:700}
+  .pm-btn-annexure{background:#1769aa;color:#fff}
+  .pm-btn-orgdrive{background:#7c3aed;color:#fff}
+  .pm-office-name{font-weight:800;color:#12385b}
+  .pm-report-row{cursor:default}
   .pm-report-row:hover td{background:#eef8ff!important}
   .pm-report-row td:last-child{font-weight:800}
   .pm-report-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
@@ -212,7 +218,12 @@ html,body{width:100%;overflow-x:hidden}
   /* Bachat Parva Special Drive */
   .bachat-tab{background:linear-gradient(135deg,#9a3412,#c2410c);color:#fff;border-color:#9a3412}
   .bachat-tab.active{background:#7c2d12}
-  .bachat-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:12px;margin:12px 0}
+  th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+  th.sortable:hover{background:#dceaf7}
+  th.sortable .sort-ind{font-size:10px;margin-left:4px;opacity:.55}
+  th.sortable.sorted-asc .sort-ind,th.sortable.sorted-desc .sort-ind{opacity:1;color:#c2410c}
+
+  .bachat-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:12px;margin:12px 0}
   .bachat-kpi{border:1px solid #fed7aa;border-radius:14px;padding:14px;background:linear-gradient(135deg,#fff,#fff7ed);box-shadow:0 4px 14px rgba(154,52,18,.10)}
   .bachat-kpi .num{font-size:22px;font-weight:850;color:#9a3412}.bachat-kpi .lbl{font-size:11px;font-weight:800;color:#475467;margin-top:5px}
   .bachat-editable input,.bachat-editable select{width:100%;height:32px;border:1px solid #cbd5e1;border-radius:6px;padding:0 8px;font-size:12px}
@@ -221,7 +232,7 @@ html,body{width:100%;overflow-x:hidden}
   @media(max-width:900px){.bachat-kpi-grid{grid-template-columns:1fr 1fr}}
 
 
-  .bachat-drive-kpis{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px;margin:12px 0 14px}
+  .bachat-drive-kpis{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:10px;margin:12px 0 14px}
   .bachat-drive-kpis .kpi{cursor:pointer;border-radius:14px;padding:14px 15px;border:1px solid #fed7aa;background:linear-gradient(135deg,#fff,#fff7ed);box-shadow:0 4px 14px rgba(154,52,18,.10);transition:.15s transform}
   .bachat-drive-kpis .kpi:hover{transform:translateY(-2px);border-color:#c2410c}
   .bachat-drive-kpis .kpi .num{font-size:22px;font-weight:850;color:#9a3412;line-height:1.1}
@@ -284,16 +295,23 @@ html,body{width:100%;overflow-x:hidden}
     </div>
     <div class="header-status">
       <div id="autoRefreshStatus">Connecting…</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <button type="button" class="secondary" id="headerRefreshBtn" onclick="manualGoogleRefresh()" style="padding:7px 12px;font-size:12px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35)">↻ Refresh from Google Sheet</button>
+        <button type="button" class="secondary" id="headerUserLoginBtn" onclick="openUserLogin()" style="padding:7px 12px;font-size:12px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35)">🔑 User / Admin Login</button>
+        <button type="button" class="secondary" id="headerAdminSettingsBtn" onclick="openAdminSectionSettings()" style="display:none;padding:7px 12px;font-size:12px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35)">⚙ Section visibility</button>
+        <button type="button" class="danger" id="headerAdminLogoutBtn" onclick="globalLogout()" style="display:none;padding:7px 12px;font-size:12px">Logout</button>
+        <span id="headerAdminStatus" style="font-size:11px;color:#d1e9ff"></span>
+      </div>
     </div>
   </div>
 </header>
 
 <div class="wrap">
   <div class="tabs">
-    <button class="tab active" onclick="showTab('mapping',this)">Village Mapping</button>
-    <button class="tab" onclick="showTab('dashboard',this)">Dashboard</button>
-    <button class="tab pmkisan-tab" onclick="showTab('pmkisan',this)">PM-KISAN Beneficiary List</button>
-    <button class="tab bachat-tab" onclick="showTab('bachat',this)">Information for Special Drive - Oct -26</button>
+    <button class="tab active" data-tab="mapping" onclick="showTab('mapping',this)">Village Mapping</button>
+    <button class="tab" data-tab="dashboard" id="tabDashboard" onclick="showTab('dashboard',this)">Dashboard</button>
+    <button class="tab pmkisan-tab" data-tab="pmkisan" id="tabPmkisan" onclick="showTab('pmkisan',this)">PM-KISAN Beneficiary List</button>
+    <button class="tab bachat-tab" data-tab="bachat" id="tabBachat" onclick="showTab('bachat',this)">Information for Special Drive - Oct -26</button>
   </div>
 
   <section id="mapping" class="panel active">
@@ -417,31 +435,34 @@ html,body{width:100%;overflow-x:hidden}
       </div>
 
       <div class="pm-upload">
-        <div class="grid">
-          <div>
-            <label>Upload PM-KISAN CSV</label>
-            <input id="pmCsvFile" type="file" accept=".csv,text/csv">
-            <div class="hint">Expected columns: State, District, Sub-District, Village, Sr. No, Farmer Name, Gender</div>
+        <div id="pmCsvLockedHint" class="pm-status" style="margin-bottom:10px">CSV upload is available after <b>Admin Login</b> (header). Password required.</div>
+        <div id="pmCsvAdminOnly" style="display:none">
+          <div class="grid">
+            <div>
+              <label>Upload PM-KISAN CSV (Admin only)</label>
+              <input id="pmCsvFile" type="file" accept=".csv,text/csv">
+              <div class="hint">Expected columns: State, District, Sub-District, Village, Sr. No, Farmer Name, Gender</div>
+            </div>
+            <div>
+              <label>Upload Mode</label>
+              <select id="pmUploadMode">
+                <option value="append">Append new only (skip duplicates)</option>
+              </select>
+              <div class="hint">Append only new rows. Duplicates skipped. Sheet stores JSON shards for multi-lakh scale.</div>
+            </div>
+            <div>
+              <label>Record Storage</label>
+              <input type="text" value="Benificary_data • PMKISAN_Farmers (JSON shards)" readonly>
+              <div class="hint">Google Sheet first for annexure; local DB cache for offline.</div>
+            </div>
+            <div class="actions" style="margin-top:20px">
+              <button class="primary" id="pmUploadBtn" onclick="uploadPmkisanCSV()">⬆ Upload CSV — Independent Upload</button>
+            </div>
           </div>
-          <div>
-            <label>Upload Mode</label>
-            <select id="pmUploadMode">
-              <option value="append">Append new only (skip duplicates)</option>
-            </select>
-            <div class="hint">Append only new rows. Duplicates (Village + Farmer + Sr. No + Mobile) skipped. Sheet stores fingerprints as JSON shards for multi-lakh scale.</div>
-          </div>
-          <div>
-            <label>Record Storage</label>
-            <input type="text" value="Benificary_data • record_json" readonly>
-            <div class="hint">Large uploads are sent in safe chunks; Annexure: Google Sheet first (PMKISAN_Farmers via api=pmkisan_beneficiaries), then cached in browser local DB for offline.</div>
-          </div>
-          <div class="actions" style="margin-top:20px">
-            <button class="primary" id="pmUploadBtn" onclick="uploadPmkisanCSV()">⬆ Upload CSV — Independent Upload</button>
-          </div>
+          <div class="pm-progress"><span id="pmUploadProgress"></span></div>
+          <div class="pm-status" id="pmUploadStatus">No PM-KISAN file selected.</div>
+          <div class="pm-note">Large files (~25 lakh): chunked upload to Google Sheet; village mapping applied later.</div>
         </div>
-        <div class="pm-progress"><span id="pmUploadProgress"></span></div>
-        <div class="pm-status" id="pmUploadStatus">No PM-KISAN file selected.</div>
-        <div class="pm-note">For very large files (around 25 lakh records), the browser keeps only the current parsed chunk in memory. Each chunk is sent to Google Sheet; Benificary_data stores village-level counts and village mapping is applied later.</div>
       </div>
     </div>
 
@@ -473,7 +494,7 @@ html,body{width:100%;overflow-x:hidden}
       <div class="dashboard-titlebar" style="margin-bottom:8px">
         <div>
           <h2 style="margin:0">PM-KISAN Beneficiary Position — Division / Sub Division / SO / Delivery Office</h2>
-          <div class="filter-note">Only villages already mapped in Village Mapping are assigned to a Delivery Office. Unmapped beneficiary villages remain pending.</div>
+          <div class="filter-note">Only villages already mapped in Village Mapping are assigned to a Delivery Office. Use <b>Annexure</b> or <b>Organised Drive</b> on each office row.</div>
         </div>
         <span class="status" id="pmSummaryStatus">Loading PM-KISAN summary…</span>
       </div>
@@ -501,7 +522,8 @@ html,body{width:100%;overflow-x:hidden}
           <h2>Information for Special Drive - Oct -26</h2>
           <div class="filter-note">Dedicated report for <b>1,050 selected BPOs</b> only. Filters apply within this list. Click a Delivery Office to open the editable Annexure (Mobile No, A/c Opening Yes/No, Reason). Date of Drive is editable per office.</div>
           <div class="actions" style="margin-top:12px">
-            <button class="primary" style="background:#0f766e" onclick="openBachatMoDataEntry()">📝 Data entry by MO for Annexure of Drive</button>
+            <button class="primary" style="background:#0f766e" onclick="openBachatMoDataEntry()">📝 Data entry by MO/BPM for Annexure of Drive</button>
+            <button class="primary" style="background:#7c3aed" onclick="openOrganisedDriveEntry()">📋 Organised Drive</button>
           </div>
         </div>
         <span class="live-badge"><span class="live-dot"></span> 1050 BPOs · Google Sheet Sync</span>
@@ -534,7 +556,8 @@ html,body{width:100%;overflow-x:hidden}
 
     <div class="bachat-kpi-grid">
       <div class="bachat-kpi"><div class="num" id="bachatBpoCount">0</div><div class="lbl">Selected BPOs</div></div>
-      <div class="bachat-kpi"><div class="num" id="bachatBenefCount">0</div><div class="lbl">Beneficiaries (mapped villages)</div></div>
+      <div class="bachat-kpi" style="border-color:#bbf7d0;background:linear-gradient(135deg,#fff,#f0fdf4)"><div class="num" id="bachatMappedBpoCount" style="color:#137333">0</div><div class="lbl">No of BPOs Mapped</div></div>
+      <div class="bachat-kpi"><div class="num" id="bachatBenefCount">0</div><div class="lbl">Total Beneficiaries Mapped</div></div>
       <div class="bachat-kpi"><div class="num" id="bachatDivCount">0</div><div class="lbl">Divisions covered</div></div>
       <div class="bachat-kpi"><div class="num" id="bachatFilteredCount">0</div><div class="lbl">Rows after filter</div></div>
     </div>
@@ -562,9 +585,14 @@ html,body{width:100%;overflow-x:hidden}
         <div class="lbl">Offices (Selected BPOs)</div>
         <div class="hint">Click to view list</div>
       </div>
+      <div class="kpi yes" data-bachat-kpi="mapped_bpos" onclick="openBachatKpiModal('mapped_bpos')">
+        <div class="num" id="bkpiMappedBpos">0</div>
+        <div class="lbl">No of BPOs Mapped</div>
+        <div class="hint">Village / beneficiary mapped</div>
+      </div>
       <div class="kpi" data-bachat-kpi="beneficiaries" onclick="openBachatKpiModal('beneficiaries')">
         <div class="num" id="bkpiBenef">0</div>
-        <div class="lbl">No of Beneficiary</div>
+        <div class="lbl">Total Beneficiaries Mapped</div>
         <div class="hint">Click to view list</div>
       </div>
       <div class="kpi filled" data-bachat-kpi="filled" onclick="openBachatKpiModal('filled')">
@@ -598,18 +626,42 @@ html,body{width:100%;overflow-x:hidden}
       <div class="table-wrap">
         <table class="hierarchy-table pm-table">
           <thead><tr>
-            <th>Division</th>
-            <th>SO Name</th>
-            <th>Delivery Office (BPO)</th>
-            <th>Office Type</th>
-            <th>No. of Villages</th>
-            <th>Beneficiaries</th>
-            <th>Date of Drive</th>
+            <th class="sortable" data-bachat-sort="division" onclick="sortBachatTable('division')">Division<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="soName" onclick="sortBachatTable('soName')">SO Name<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="officeName" onclick="sortBachatTable('officeName')">Delivery Office (BPO)<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="officeType" onclick="sortBachatTable('officeType')">Office Type<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="villageCount" onclick="sortBachatTable('villageCount')">No. of Villages<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="beneficiaryCount" onclick="sortBachatTable('beneficiaryCount')">Beneficiaries<span class="sort-ind">⇅</span></th>
+            <th class="sortable" data-bachat-sort="driveDate" onclick="sortBachatTable('driveDate')">Date of Drive<span class="sort-ind">⇅</span></th>
           </tr></thead>
           <tbody id="bachatSummaryBody"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
+    <div class="card" style="margin-top:14px">
+      <div class="dashboard-titlebar">
+        <div>
+          <h2 style="margin:0">Organised Drive — Mail Overseer Plan</h2>
+          <div class="filter-note">Saved Organised Drive entries (villages &amp; beneficiaries auto-filled from mapping / PM-KISAN).</div>
+        </div>
+        <div class="actions" style="margin:0">
+          <button class="secondary" onclick="loadOrganisedDriveList()">↻ Refresh</button>
+          <button class="excel-btn" onclick="exportOrganisedDriveExcel()">▣ Excel</button>
+          <button class="pdf-btn" onclick="exportOrganisedDrivePDF()">▤ PDF</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="hierarchy-table pm-table">
+          <thead><tr>
+            <th>Division</th><th>Sub Division</th><th>SO Name</th><th>Office Name</th>
+            <th>Villages</th><th>Beneficiaries</th><th>Mail Overseer</th><th>Date of Drive</th><th>Days</th>
+          </tr></thead>
+          <tbody id="organisedDriveBody"><tr><td colspan="9" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="status" id="organisedDriveStatus" style="margin-top:8px"></div>
+    </div>
+
   </section>
 </div>
 
@@ -618,7 +670,7 @@ html,body{width:100%;overflow-x:hidden}
   <div class="report-modal" style="width:min(720px,96vw);height:auto;max-height:92vh">
     <div class="modal-head">
       <div>
-        <h3 id="moEntryTitle">Data entry by MO — Annexure of Drive</h3>
+        <h3 id="moEntryTitle">Data entry by MO/BPM — Annexure of Drive</h3>
         <div class="modal-sub">Information for Special Drive - Oct -26</div>
       </div>
       <button class="close-btn" onclick="closeMoEntryModal()" title="Close">×</button>
@@ -647,7 +699,7 @@ html,body{width:100%;overflow-x:hidden}
         </div>
         <div>
           <label>Beneficiary Sr. No. (as per Annexure)</label>
-          <input type="number" id="moSrNo" min="1" step="1" placeholder="Enter Sr. No." oninput="moOnSrNoChange()">
+          <input type="number" id="moSrNo" min="1" step="1" placeholder="Enter Annexure Sr. No." oninput="moOnSrNoChange()" onchange="moOnSrNoChange()" onkeyup="moOnSrNoChange()">
         </div>
       </div>
 
@@ -688,6 +740,106 @@ html,body{width:100%;overflow-x:hidden}
   </div>
 </div>
 
+
+
+<div id="adminSectionModal" class="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="report-modal" style="width:min(560px,96vw);height:auto;max-height:90vh">
+    <div class="modal-head">
+      <div>
+        <h3>Admin — Section visibility &amp; Division user</h3>
+        <div class="modal-sub">Control which tabs staff can see. Division user password: <b>doadmin</b> (view only, no CSV upload).</div>
+      </div>
+      <button class="close-btn" onclick="closeAdminSectionSettings()" title="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="card" style="margin:0;padding:12px;background:#f8fafc">
+        <h2 style="font-size:14px;margin:0 0 10px">Show sections to Division users</h2>
+        <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600">
+          <input type="checkbox" id="visDashboard" checked> Dashboard
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600">
+          <input type="checkbox" id="visPmkisan" checked> PM-KISAN Beneficiary List
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600">
+          <input type="checkbox" id="visBachat" checked> Information for Special Drive - Oct -26
+        </label>
+        <div class="hint" style="margin-top:8px">Village Mapping is always available. Guests without login only see Mapping (and any section you leave public is still hidden until Division/Admin login if unchecked for guests — use checkboxes above for Division role).</div>
+      </div>
+      <div class="card" style="margin:12px 0 0;padding:12px;background:#eef7ff">
+        <h2 style="font-size:14px;margin:0 0 8px">Division user</h2>
+        <div style="font-size:13px;line-height:1.5">
+          Password: <code>doadmin</code><br>
+          Access: View enabled sections above.<br>
+          <b>No CSV upload</b> (PM-KISAN / BPO list).<br>
+          Admin password remains for full control + CSV.
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0;font-weight:600">
+          <input type="checkbox" id="visDivisionEnabled" checked> Allow Division user login
+        </label>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button class="primary" onclick="saveAdminSectionSettings()">Save settings</button>
+        <button class="secondary" onclick="closeAdminSectionSettings()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="organisedDriveModal" class="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="report-modal" style="width:min(760px,96vw);height:auto;max-height:92vh">
+    <div class="modal-head">
+      <div>
+        <h3>Organised Drive — Data Entry</h3>
+        <div class="modal-sub">Information for Special Drive - Oct -26</div>
+      </div>
+      <button class="close-btn" onclick="closeOrganisedDriveEntry()" title="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="mo-form-grid">
+        <div>
+          <label>Division</label>
+          <select id="odDivision" onchange="odOnDivisionChange()"></select>
+        </div>
+        <div>
+          <label>Sub Division</label>
+          <select id="odSub" onchange="odOnSubChange()"></select>
+        </div>
+        <div>
+          <label>SO Name</label>
+          <select id="odSO" onchange="odOnSOChange()"></select>
+        </div>
+        <div>
+          <label>Office Name</label>
+          <select id="odOffice" onchange="odOnOfficeChange()"></select>
+        </div>
+        <div>
+          <label>No of Villages Attached</label>
+          <input type="text" id="odVillages" readonly placeholder="Auto">
+        </div>
+        <div>
+          <label>Total No of Beneficiary</label>
+          <input type="text" id="odBeneficiaries" readonly placeholder="Auto">
+        </div>
+        <div>
+          <label>Name of Mail Overseer</label>
+          <input type="text" id="odMailOverseer" placeholder="MO- (Sub Division Name)">
+        </div>
+        <div>
+          <label>Date of Drive</label>
+          <input type="date" id="odDriveDate">
+        </div>
+        <div>
+          <label>No of Day's Drive</label>
+          <input type="number" id="odDriveDays" min="1" step="1" value="1">
+        </div>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button class="primary" id="odSubmitBtn" onclick="submitOrganisedDrive()">Submit</button>
+        <button class="secondary" onclick="closeOrganisedDriveEntry()">Cancel</button>
+        <span id="odStatus" style="font-size:12px;color:#667085"></span>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="bachatReportModal" class="modal-backdrop" role="dialog" aria-modal="true">
   <div class="report-modal" style="width:min(1400px,98vw);height:min(92vh,980px)">
     <div class="modal-head">
@@ -1263,13 +1415,24 @@ function setAutoRefreshStatus(message){
 }
 
 function showTab(id, btn){
+  const role = typeof getUserRole === 'function' ? getUserRole() : 'guest';
+  const vis = typeof loadSectionVisibility === 'function' ? loadSectionVisibility() : {dashboard:true,pmkisan:true,bachat:true};
+  if (id !== 'mapping' && role === 'guest') {
+    if (typeof toast === 'function') toast('Login as Division user or Admin to open this section.', false);
+    return;
+  }
+  if (role === 'division') {
+    if (id === 'dashboard' && !vis.dashboard) { toast('Dashboard is hidden by Admin.', false); return; }
+    if (id === 'pmkisan' && !vis.pmkisan) { toast('PM-KISAN section is hidden by Admin.', false); return; }
+    if (id === 'bachat' && !vis.bachat) { toast('Special Drive section is hidden by Admin.', false); return; }
+  }
   document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-  $(id).classList.add('active');
-  btn.classList.add('active');
+  if ($(id)) $(id).classList.add('active');
+  if (btn) btn.classList.add('active');
   if(id === 'dashboard') renderDashboard();
   if(id === 'pmkisan') loadPmkisanSummary();
-  if(id === 'bachat'){ applyBachatAdminUi(); loadBachatSummary(); try{ loadPmkisanSummary(); }catch(_e){} }
+  if(id === 'bachat'){ applyBachatAdminUi(); loadBachatSummary(); try{ loadPmkisanSummary(); }catch(_e){} try{ loadOrganisedDriveList(); }catch(_e){} }
 }
 
 function fillSelect(sel, values, placeholder, disabled=false){
@@ -1385,9 +1548,8 @@ function renderOfficeList(){
   list.innerHTML = offices.length ? offices.map(o => `
     <div class="search-item office-option" data-office-id="${esc(o.officeId)}">
       <b>${esc(o.officeName)}</b>
-      <span style="color:#667085">
-        (${esc(o.officeType)} • SOL ${esc(o.solId)} • ${esc(o.pincode)})
-      </span>
+      <span style="color:#667085"> — ${esc(o.soName || '—')} (${esc(o.division || '—')})</span>
+      <div style="font-size:11px;color:#98a2b3;margin-top:2px">${esc(o.officeType || '')} · SOL ${esc(o.solId || '')} · PIN ${esc(o.pincode || '')}</div>
     </div>`).join('') :
     '<div class="search-item">No delivery office found</div>';
 
@@ -1927,7 +2089,7 @@ function renderHierarchy(offices){
     '</tr>';
   }
   const body = document.getElementById('dashboardBody');
-  if (body) body.innerHTML = html;
+  if (body) { body.innerHTML = html; try { body.__hierBound = false; bindDashboardHierarchyClicks(); } catch(_e){} }
 }
 
 function hierarchyRow(node, parentKey){
@@ -1953,12 +2115,8 @@ function hierarchyRow(node, parentKey){
     chevron = '<span class="leaf">\u2022</span> ';
   }
 
-  const safeKey = String(node.key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const clickAttr = (!isOffice && has)
-    ? "onclick=\"toggleHierarchyRow(event,'" + safeKey + "')\" style=\"cursor:pointer\""
-    : '';
-
-  return '<tr class="tree-row level-' + level + '" data-tree-key="' + esc(node.key) + '" data-parent-key="' + esc(parentKey||'') + '" data-level="' + level + '" ' + clickAttr + '>' +
+  const clickable = (!isOffice && has);
+  return '<tr class="tree-row level-' + level + (clickable ? ' tree-expandable' : '') + '" data-tree-key="' + esc(node.key) + '" data-parent-key="' + esc(parentKey||'') + '" data-level="' + level + '"' + (clickable ? ' style="cursor:pointer"' : '') + '>' +
     '<td class="tree-cell"><span class="tree-indent l' + Math.min(level,3) + '">' + chevron + '<span class="tree-name">' + esc(node.name) + '</span>' + badge + '</span></td>' +
     '<td class="num">' + Number(node.offices||0).toLocaleString() + '</td>' +
     '<td class="num status-num status-mapped">' + Number(node.mapped||0).toLocaleString() + '</td>' +
@@ -2001,6 +2159,20 @@ function toggleHierarchyRow(ev, key){
   renderHierarchy(officesForFilters());
 }
 
+
+
+function bindDashboardHierarchyClicks(){
+  const body = document.getElementById('dashboardBody');
+  if (!body || body.__hierBound) return;
+  body.__hierBound = true;
+  body.addEventListener('click', function(ev){
+    const tr = ev.target.closest('tr.tree-expandable, tr.tree-row');
+    if (!tr || !tr.classList.contains('tree-expandable')) return;
+    const key = tr.getAttribute('data-tree-key');
+    if (!key) return;
+    toggleHierarchyRow(ev, key);
+  });
+}
 
 /* ---------- KPI detail popup ---------- */
 let activeKpiKey = '';
@@ -2092,6 +2264,8 @@ document.addEventListener('click', e => {
   if(e.target.id === 'pmReportModal') closePmReport();
   if(e.target.id === 'bachatReportModal') closeBachatReport();
   if(e.target.id === 'moEntryModal') closeMoEntryModal();
+  if(e.target.id === 'organisedDriveModal') closeOrganisedDriveEntry();
+  if(e.target.id === 'adminSectionModal') closeAdminSectionSettings();
 });
 
 function downloadBlob(content, name, type){
@@ -2657,6 +2831,7 @@ async function pmReadCsv(file, onChunk){
 
 async function uploadPmkisanCSV(){
   if(pmUploadRunning) return;
+  if(!isBachatAdmin()){ toast('Admin login required to upload PM-KISAN CSV.', false); return; }
   const file = $('pmCsvFile').files?.[0];
   if(!file){ toast('Please select the PM-KISAN CSV file.', false); return; }
   if(!/\.csv$/i.test(file.name)){ toast('Please upload a CSV file.', false); return; }
@@ -2792,26 +2967,142 @@ function renderPmkisanTable(){
     String(a.officeName).localeCompare(String(b.officeName))
   );
 
+  window.__pmTableRows = rows;
+
   $('pmSummaryBody').innerHTML = rows.length ? rows.map((r, i) => `
-    <tr class="pm-report-row" data-pm-index="${i}" title="Click to open PM-KISAN beneficiary report">
+    <tr class="pm-report-row" data-pm-index="${i}">
       <td>${esc(r.division)}</td>
       <td>${esc(r.subDivision)}</td>
       <td>${esc(r.soName)}</td>
-      <td><b>${esc(r.officeName)}</b></td>
+      <td>
+        <div class="pm-office-name">${esc(r.officeName)}</div>
+        <div class="pm-office-actions">
+          <button type="button" class="pm-btn-annexure" data-pm-action="annexure" data-pm-index="${i}" title="Open PM-KISAN Annexure">Annexure</button>
+          <button type="button" class="pm-btn-orgdrive" data-pm-action="orgdrive" data-pm-index="${i}" title="Organised Drive for this office">Organised Drive</button>
+        </div>
+      </td>
       <td>${esc(r.officeType)}</td>
       <td class="pm-num">${Number(r.villageCount || 0).toLocaleString()}</td>
       <td class="pm-num pm-total">${Number(r.beneficiaryCount || 0).toLocaleString()}</td>
     </tr>`).join('') :
     '<tr><td colspan="7" class="empty">No PM-KISAN beneficiary records found for the selected filters.</td></tr>';
 
-  $('pmSummaryBody').querySelectorAll('.pm-report-row').forEach((tr, i) => {
-    tr.addEventListener('click', () => openPmReport(rows[i]));
-  });
+  const body = $('pmSummaryBody');
+  if (body && !body.__pmActionsBound) {
+    body.__pmActionsBound = true;
+    body.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-pm-action]');
+      if (!btn) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const idx = Number(btn.getAttribute('data-pm-index'));
+      const list = window.__pmTableRows || [];
+      const row = list[idx];
+      if (!row) return;
+      const action = btn.getAttribute('data-pm-action');
+      if (action === 'annexure') openPmReport(row);
+      else if (action === 'orgdrive') openOrganisedDriveForOffice(row);
+    });
+  }
 
   const total = rows.reduce((sum, r) => sum + Number(r.beneficiaryCount || 0), 0);
   $('pmSummaryStatus').textContent =
-    `${rows.length.toLocaleString()} office rows • ${total.toLocaleString()} beneficiaries • Click any row for Annexure report`;
+    `${rows.length.toLocaleString()} office rows • ${total.toLocaleString()} beneficiaries • Annexure or Organised Drive per office`;
 }
+
+/** Open Organised Drive form pre-filled for a specific office (from PM-KISAN / Bachat row). */
+function openOrganisedDriveForOffice(officeRow){
+  if (!officeRow) {
+    openOrganisedDriveEntry();
+    return;
+  }
+  // Ensure modal opens and lists are built
+  openOrganisedDriveEntry();
+
+  const division = String(officeRow.division || '').trim();
+  const sub = String(officeRow.subDivision || '').trim();
+  const so = String(officeRow.soName || '').trim();
+  const officeId = String(officeRow.officeId || '').trim();
+  const officeName = String(officeRow.officeName || '').trim();
+
+  // Cascade selects using existing handlers when possible
+  const divEl = document.getElementById('odDivision');
+  if (divEl && division) {
+    // ensure option exists
+    if (![...divEl.options].some(o => o.value === division)) {
+      const opt = document.createElement('option');
+      opt.value = division; opt.textContent = division;
+      divEl.appendChild(opt);
+    }
+    divEl.value = division;
+    if (typeof odOnDivisionChange === 'function') odOnDivisionChange();
+  }
+
+  const subEl = document.getElementById('odSub');
+  if (subEl && sub) {
+    if (![...subEl.options].some(o => o.value === sub)) {
+      const opt = document.createElement('option');
+      opt.value = sub; opt.textContent = sub;
+      subEl.appendChild(opt);
+    }
+    subEl.value = sub;
+    if (typeof odOnSubChange === 'function') odOnSubChange();
+  }
+
+  const soEl = document.getElementById('odSO');
+  if (soEl && so) {
+    if (![...soEl.options].some(o => o.value === so)) {
+      const opt = document.createElement('option');
+      opt.value = so; opt.textContent = so;
+      soEl.appendChild(opt);
+    }
+    soEl.value = so;
+    if (typeof odOnSOChange === 'function') odOnSOChange();
+  }
+
+  const officeEl = document.getElementById('odOffice');
+  if (officeEl) {
+    const val = officeId || officeName;
+    if (val && ![...officeEl.options].some(o => o.value === val || o.textContent === officeName)) {
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = officeName || val;
+      officeEl.appendChild(opt);
+    }
+    // try match by id then by name
+    let matched = false;
+    for (const o of officeEl.options) {
+      if (officeId && o.value === officeId) { officeEl.value = o.value; matched = true; break; }
+    }
+    if (!matched) {
+      for (const o of officeEl.options) {
+        if (officeName && (o.value === officeName || o.textContent === officeName)) {
+          officeEl.value = o.value; matched = true; break;
+        }
+      }
+    }
+    if (!matched && val) officeEl.value = val;
+    if (typeof odOnOfficeChange === 'function') odOnOfficeChange();
+  }
+
+  // Force auto counts from the source row (PM-KISAN has accurate village/beneficiary)
+  const v = Number(officeRow.villageCount || 0);
+  const b = Number(officeRow.beneficiaryCount || 0);
+  const vEl = document.getElementById('odVillages');
+  const bEl = document.getElementById('odBeneficiaries');
+  if (vEl) vEl.value = String(v);
+  if (bEl) bEl.value = String(b);
+
+  const mo = document.getElementById('odMailOverseer');
+  if (mo && !String(mo.value || '').trim() && sub) mo.value = 'MO- (' + sub + ')';
+
+  const status = document.getElementById('odStatus');
+  if (status) {
+    status.textContent = officeName
+      ? ('Pre-filled for ' + officeName + ' — review and Submit.')
+      : 'Review and Submit.';
+  }
+}
+window.openOrganisedDriveForOffice = openOrganisedDriveForOffice;
 
 function renderPmkisanKpis(){
   $('pmTotal').textContent = Number(PMKISAN.total || 0).toLocaleString();
@@ -3445,8 +3736,10 @@ function updateBachatDriveKpis(){
   });
   const pct = (n) => benef > 0 ? ((n * 100) / benef).toFixed(2) + '% of beneficiaries' : '0% of beneficiaries';
 
+  const mapped = bachatMappedStats(offices);
   if ($('bkpiOffices')) $('bkpiOffices').textContent = offices.length.toLocaleString();
-  if ($('bkpiBenef')) $('bkpiBenef').textContent = benef.toLocaleString();
+  if ($('bkpiMappedBpos')) $('bkpiMappedBpos').textContent = mapped.mappedBpos.toLocaleString();
+  if ($('bkpiBenef')) $('bkpiBenef').textContent = mapped.mappedBenef.toLocaleString();
   if ($('bkpiFilled')) $('bkpiFilled').textContent = filled.toLocaleString();
   if ($('bkpiFilledPct')) $('bkpiFilledPct').textContent = pct(filled);
   if ($('bkpiYes')) $('bkpiYes').textContent = yes.toLocaleString();
@@ -3472,6 +3765,11 @@ function openBachatKpiModal(key){
       beneficiaryCount: r.beneficiaryCount
     }));
     body = rows.map(r => `<tr><td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.soName)}</td><td>${esc(r.officeName)}</td><td>${esc(r.officeType)}</td><td>${Number(r.villageCount||0)}</td><td>${Number(r.beneficiaryCount||0)}</td></tr>`).join('');
+  } else if (key === 'mapped_bpos') {
+    title = 'No of BPOs Mapped (village or beneficiary mapped)';
+    head = '<tr><th>Division</th><th>Sub Division</th><th>SO Name</th><th>Delivery Office</th><th>Villages</th><th>Beneficiaries</th></tr>';
+    rows = offices.filter(r => Number(r.villageCount||0) > 0 || Number(r.beneficiaryCount||0) > 0);
+    body = rows.map(r => `<tr><td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.soName)}</td><td>${esc(r.officeName)}</td><td>${Number(r.villageCount||0)}</td><td>${Number(r.beneficiaryCount||0)}</td></tr>`).join('');
   } else if (key === 'beneficiaries') {
     title = 'No of Beneficiary — by BPO';
     head = '<tr><th>Division</th><th>Sub Division</th><th>SO Name</th><th>Delivery Office</th><th>Beneficiaries</th></tr>';
@@ -3562,45 +3860,206 @@ const _exportKpiPDFOrig = typeof exportKpiPDF === 'function' ? exportKpiPDF : nu
 
 /* ---- Special Drive Admin + MO data entry ---- */
 const BACHAT_ADMIN_PASS = 'Rsbt@440010';
+const DIVISION_USER_PASS = 'doadmin';
 const BACHAT_ADMIN_KEY = 'bachatAdminSession';
+const ROLE_KEY = 'appUserRole'; // admin | division | guest
+const SECTION_VIS_KEY = 'appSectionVisibility';
 
-function isBachatAdmin(){
-  try { return sessionStorage.getItem(BACHAT_ADMIN_KEY) === '1'; } catch(_e){ return false; }
+function getUserRole(){
+  try {
+    const r = sessionStorage.getItem(ROLE_KEY);
+    if (r === 'admin' || r === 'division') return r;
+    // legacy admin flag
+    if (sessionStorage.getItem(BACHAT_ADMIN_KEY) === '1') return 'admin';
+  } catch(_e){}
+  return 'guest';
+}
+function setUserRole(role){
+  try {
+    sessionStorage.setItem(ROLE_KEY, role || 'guest');
+    if (role === 'admin') sessionStorage.setItem(BACHAT_ADMIN_KEY, '1');
+    else sessionStorage.removeItem(BACHAT_ADMIN_KEY);
+  } catch(_e){}
+}
+function isBachatAdmin(){ return getUserRole() === 'admin'; }
+function isDivisionUser(){ return getUserRole() === 'division'; }
+function canViewReports(){ const r = getUserRole(); return r === 'admin' || r === 'division'; }
+
+function loadSectionVisibility(){
+  const def = { dashboard: true, pmkisan: true, bachat: true, divisionEnabled: true };
+  try {
+    const raw = localStorage.getItem(SECTION_VIS_KEY);
+    if (!raw) return def;
+    const o = JSON.parse(raw);
+    return Object.assign({}, def, o);
+  } catch(_e){ return def; }
+}
+function saveSectionVisibility(cfg){
+  try { localStorage.setItem(SECTION_VIS_KEY, JSON.stringify(cfg)); } catch(_e){}
+}
+
+function applySectionVisibility(){
+  const vis = loadSectionVisibility();
+  const role = getUserRole();
+  const showDash = role === 'admin' || (canViewReports() && vis.dashboard);
+  const showPm = role === 'admin' || (canViewReports() && vis.pmkisan);
+  const showBachat = role === 'admin' || (canViewReports() && vis.bachat);
+  // Guests: hide report tabs entirely
+  if (role === 'guest') {
+    setTabVisible('dashboard', false);
+    setTabVisible('pmkisan', false);
+    setTabVisible('bachat', false);
+  } else {
+    setTabVisible('dashboard', showDash);
+    setTabVisible('pmkisan', showPm);
+    setTabVisible('bachat', showBachat);
+  }
+  // If active panel is hidden, jump to mapping
+  const active = document.querySelector('.panel.active');
+  if (active) {
+    const id = active.id;
+    if ((id === 'dashboard' && !showDash) || (id === 'pmkisan' && !showPm) || (id === 'bachat' && !showBachat) || (role === 'guest' && id !== 'mapping')) {
+      const mapBtn = document.querySelector('.tab[data-tab="mapping"]');
+      if (mapBtn) showTab('mapping', mapBtn);
+    }
+  }
+}
+
+function setTabVisible(tabId, visible){
+  const btn = document.querySelector('.tab[data-tab="' + tabId + '"]') || $(tabId === 'dashboard' ? 'tabDashboard' : tabId === 'pmkisan' ? 'tabPmkisan' : tabId === 'bachat' ? 'tabBachat' : null);
+  const panel = $(tabId);
+  if (btn) btn.style.display = visible ? '' : 'none';
+  if (panel && !visible) panel.classList.remove('active');
 }
 
 function applyBachatAdminUi(){
-  const on = isBachatAdmin();
+  const role = getUserRole();
+  const isAdmin = role === 'admin';
+  const isDiv = role === 'division';
+  // CSV only for admin
   const box = $('bachatCsvAdminOnly');
   const hint = $('bachatCsvLockedHint');
   const loginBtn = $('bachatAdminLoginBtn');
   const logoutBtn = $('bachatAdminLogoutBtn');
   const status = $('bachatAdminStatus');
-  if (box) box.style.display = on ? 'block' : 'none';
-  if (hint) hint.style.display = on ? 'none' : 'block';
-  if (loginBtn) loginBtn.style.display = on ? 'none' : 'inline-block';
-  if (logoutBtn) logoutBtn.style.display = on ? 'inline-block' : 'none';
-  if (status) {
-    status.textContent = on ? 'Admin logged in' : '';
-    status.className = on ? 'admin-on' : '';
+  if (box) box.style.display = isAdmin ? 'block' : 'none';
+  if (hint) {
+    hint.style.display = isAdmin ? 'none' : 'block';
+    if (!isAdmin) hint.textContent = isDiv
+      ? 'Division user: view only. CSV upload requires Admin login.'
+      : 'CSV upload is available after Admin Login.';
   }
+  if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'inline-block';
+  if (logoutBtn) logoutBtn.style.display = (isAdmin || isDiv) ? 'inline-block' : 'none';
+  if (status) {
+    status.textContent = isAdmin ? 'Admin logged in' : (isDiv ? 'Division user' : '');
+    status.className = isAdmin || isDiv ? 'admin-on' : '';
+  }
+  // PM-KISAN CSV — admin only
+  const pmBox = $('pmCsvAdminOnly');
+  const pmHint = $('pmCsvLockedHint');
+  if (pmBox) pmBox.style.display = isAdmin ? 'block' : 'none';
+  if (pmHint) {
+    pmHint.style.display = isAdmin ? 'none' : 'block';
+    if (!isAdmin) pmHint.innerHTML = isDiv
+      ? 'Division user can view reports. <b>CSV upload requires Admin</b>.'
+      : 'CSV upload is available after <b>Admin Login</b> (header).';
+  }
+  // Header
+  const hLogin = $('headerUserLoginBtn');
+  const hLogout = $('headerAdminLogoutBtn');
+  const hStatus = $('headerAdminStatus');
+  const hSettings = $('headerAdminSettingsBtn');
+  if (hLogin) hLogin.style.display = (isAdmin || isDiv) ? 'none' : 'inline-block';
+  if (hLogout) hLogout.style.display = (isAdmin || isDiv) ? 'inline-block' : 'none';
+  if (hSettings) hSettings.style.display = isAdmin ? 'inline-block' : 'none';
+  if (hStatus) {
+    hStatus.textContent = isAdmin ? 'Admin · CSV + settings' : (isDiv ? 'Division user · view only' : '');
+  }
+  applySectionVisibility();
 }
 
-function bachatAdminLogin(){
-  const pass = window.prompt('Admin password for Special Drive CSV upload:');
+function openUserLogin(){
+  const pass = window.prompt('Enter password\n• Admin (CSV + settings)\n• Division user (view sections, no CSV)');
   if (pass == null) return;
   if (pass === BACHAT_ADMIN_PASS) {
-    try { sessionStorage.setItem(BACHAT_ADMIN_KEY, '1'); } catch(_e){}
+    setUserRole('admin');
     applyBachatAdminUi();
-    toast('Admin login successful. CSV upload is available.', true);
-  } else {
-    toast('Incorrect admin password.', false);
+    toast('Admin login successful. Sections + CSV unlocked.', true);
+    return;
   }
+  const vis = loadSectionVisibility();
+  if (pass === DIVISION_USER_PASS) {
+    if (vis.divisionEnabled === false) {
+      toast('Division user login is disabled by Admin.', false);
+      return;
+    }
+    setUserRole('division');
+    applyBachatAdminUi();
+    toast('Division user login. You can view enabled sections (no CSV upload).', true);
+    return;
+  }
+  toast('Incorrect password.', false);
 }
-
-function bachatAdminLogout(){
-  try { sessionStorage.removeItem(BACHAT_ADMIN_KEY); } catch(_e){}
+function globalAdminLogin(){ openUserLogin(); }
+function globalLogout(){
+  setUserRole('guest');
   applyBachatAdminUi();
-  toast('Admin logged out. CSV upload hidden.', true);
+  toast('Logged out. Only Village Mapping is available.', true);
+  const mapBtn = document.querySelector('.tab[data-tab="mapping"]');
+  if (mapBtn) showTab('mapping', mapBtn);
+}
+function globalAdminLogout(){ globalLogout(); }
+function bachatAdminLogin(){ openUserLogin(); }
+function bachatAdminLogout(){ globalLogout(); }
+
+function openAdminSectionSettings(){
+  if (!isBachatAdmin()) { toast('Admin login required.', false); return; }
+  const vis = loadSectionVisibility();
+  const modal = $('adminSectionModal');
+  if (!modal) return;
+  if ($('visDashboard')) $('visDashboard').checked = !!vis.dashboard;
+  if ($('visPmkisan')) $('visPmkisan').checked = !!vis.pmkisan;
+  if ($('visBachat')) $('visBachat').checked = !!vis.bachat;
+  if ($('visDivisionEnabled')) $('visDivisionEnabled').checked = vis.divisionEnabled !== false;
+  modal.classList.add('open');
+}
+function closeAdminSectionSettings(){
+  const modal = $('adminSectionModal');
+  if (modal) modal.classList.remove('open');
+}
+function saveAdminSectionSettings(){
+  if (!isBachatAdmin()) { toast('Admin login required.', false); return; }
+  const cfg = {
+    dashboard: !!( $('visDashboard') && $('visDashboard').checked ),
+    pmkisan: !!( $('visPmkisan') && $('visPmkisan').checked ),
+    bachat: !!( $('visBachat') && $('visBachat').checked ),
+    divisionEnabled: !!( $('visDivisionEnabled') && $('visDivisionEnabled').checked )
+  };
+  saveSectionVisibility(cfg);
+  applySectionVisibility();
+  toast('Section visibility saved.', true);
+  closeAdminSectionSettings();
+}
+window.openUserLogin = openUserLogin;
+window.globalLogout = globalLogout;
+window.openAdminSectionSettings = openAdminSectionSettings;
+window.closeAdminSectionSettings = closeAdminSectionSettings;
+window.saveAdminSectionSettings = saveAdminSectionSettings;
+
+async function manualGoogleRefresh(){
+  setAutoRefreshStatus('Refreshing from Google Sheet…');
+  try {
+    await loadData(true);
+    try { await loadPmkisanSummary(); } catch(_e){}
+    try { await loadBachatSummary(); } catch(_e){}
+    try { await loadOrganisedDriveList(); } catch(_e){}
+    setAutoRefreshStatus('Synced ' + new Date().toLocaleTimeString('en-IN'));
+    toast('Refreshed from Google Sheet.', true);
+  } catch (err) {
+    setAutoRefreshStatus('Refresh failed');
+    toast(err.message || String(err), false);
+  }
 }
 
 
@@ -3722,49 +4181,93 @@ async function moOnOfficeChange(){
         'Reason if No': e.reason != null ? e.reason : (r['Reason if No'] || '')
       });
     });
+    // Same order as Annexure report so Sr. No. matches printed S.No.
+    records = records.map(r => ({
+      Village: r.Village || r.village || '',
+      'Farmer Name': r['Farmer Name'] || r.farmer_name || r.farmerName || r.n || '',
+      Gender: r.Gender || r.gender || r.g || '',
+      'Sr. No': r['Sr. No'] || r.sr_no || r.srNo || r.sr || '',
+      'Mobile No': r['Mobile No'] || r.mobile || r.m || '',
+      'Status of A/c Opening': r['Status of A/c Opening'] || r.account_status || r.st || '',
+      'Reason if No': r['Reason if No'] || r.reason || r.rs || '',
+      fingerprint: r.fingerprint || r.fp || ''
+    }));
     records.sort((a, b) =>
+      String(a.Village || '').localeCompare(String(b.Village || '')) ||
       Number(a['Sr. No'] || 0) - Number(b['Sr. No'] || 0) ||
       String(a['Farmer Name'] || '').localeCompare(String(b['Farmer Name'] || ''))
     );
     moBeneficiaryList = records.map((r, i) => Object.assign({}, r, { __annexureSr: i + 1 }));
-    const src = loaded.source === 'google_sheet' ? 'Google Sheet' : (loaded.source.indexOf('local') >= 0 ? 'local cache' : 'source');
+    const src = loaded.source === 'google_sheet' ? 'Google Sheet' : ((loaded.source || '').indexOf('local') >= 0 ? 'local cache' : 'source');
     $('moEntryStatus').textContent = moBeneficiaryList.length
-      ? (moBeneficiaryList.length.toLocaleString() + ' beneficiaries from ' + src + ' — enter Sr. No.')
-      : 'No beneficiaries found. Deploy Code.gs, re-upload PM-KISAN CSV, and map villages.';
+      ? (moBeneficiaryList.length.toLocaleString() + ' beneficiaries from ' + src + ' — enter Annexure Sr. No. (1…' + moBeneficiaryList.length + ')')
+      : 'No beneficiaries found for this office. Ensure villages are mapped and PM-KISAN data is on Google Sheet / local cache.';
   } catch (err) {
     $('moEntryStatus').textContent = 'Failed to load beneficiaries: ' + (err.message || String(err));
   }
 }
 
+function moFarmerDisplayName(r){
+  if (!r) return '';
+  return String(r['Farmer Name'] || r.farmer_name || r.farmerName || r.n || '').trim();
+}
+function moGenderDisplay(r){
+  if (!r) return '';
+  return String(r.Gender || r.gender || r.g || '').trim();
+}
 function moOnSrNoChange(){
-  const n = parseInt(String($('moSrNo').value || '').trim(), 10);
+  const raw = String($('moSrNo').value || '').trim();
+  const n = parseInt(raw, 10);
   moSelectedRecord = null;
-  $('moFarmerName').textContent = '—';
-  $('moGender').textContent = '—';
-  $('moMobile').value = '';
-  $('moAccountStatus').value = '';
-  $('moReason').value = '';
-  if (!n || n < 1) return;
-
-  let rec = moBeneficiaryList.find(r => Number(r.__annexureSr) === n);
-  if (!rec) {
-    // also match original Sr. No from CSV
-    rec = moBeneficiaryList.find(r => Number(r['Sr. No'] || 0) === n);
-  }
-  if (!rec) {
-    $('moEntryStatus').textContent = 'No beneficiary found for Sr. No. ' + n;
+  if ($('moFarmerName')) $('moFarmerName').textContent = '—';
+  if ($('moGender')) $('moGender').textContent = '—';
+  if ($('moMobile')) $('moMobile').value = '';
+  if ($('moAccountStatus')) $('moAccountStatus').value = '';
+  if ($('moReason')) $('moReason').value = '';
+  if (!raw || !n || n < 1) {
+    if ($('moEntryStatus') && moBeneficiaryList.length) {
+      $('moEntryStatus').textContent = moBeneficiaryList.length.toLocaleString() + ' beneficiaries loaded — enter Annexure Sr. No.';
+    }
     return;
   }
+
+  if (!moBeneficiaryList.length) {
+    if ($('moEntryStatus')) $('moEntryStatus').textContent = 'No beneficiary list loaded. Select Office Name first and wait for load.';
+    return;
+  }
+
+  // 1) Annexure S.No (1-based position in annexure order)
+  let rec = moBeneficiaryList.find(r => Number(r.__annexureSr) === n);
+  // 2) Original CSV Sr. No
+  if (!rec) rec = moBeneficiaryList.find(r => Number(r['Sr. No'] || r.sr_no || 0) === n);
+  // 3) Index fallback (1-based)
+  if (!rec && n >= 1 && n <= moBeneficiaryList.length) rec = moBeneficiaryList[n - 1];
+
+  if (!rec) {
+    if ($('moEntryStatus')) {
+      $('moEntryStatus').textContent = 'No beneficiary for Sr. No. ' + n + ' (list has ' + moBeneficiaryList.length + '). Use Annexure serial 1–' + moBeneficiaryList.length + '.';
+    }
+    return;
+  }
+
   moSelectedRecord = rec;
-  $('moFarmerName').textContent = rec['Farmer Name'] || '—';
-  $('moGender').textContent = rec.Gender || '—';
-  $('moMobile').value = rec['Mobile No'] || '';
-  const st = String(rec['Status of A/c Opening'] || '').toLowerCase();
-  if (st === 'yes' || st === 'y') $('moAccountStatus').value = 'Yes';
-  else if (st === 'no' || st === 'n') $('moAccountStatus').value = 'No';
-  else $('moAccountStatus').value = '';
-  $('moReason').value = rec['Reason if No'] || '';
-  $('moEntryStatus').textContent = 'Beneficiary loaded — update fields and click Submit.';
+  const name = moFarmerDisplayName(rec);
+  const gender = moGenderDisplay(rec);
+  if ($('moFarmerName')) $('moFarmerName').textContent = name || '—';
+  if ($('moGender')) $('moGender').textContent = gender || '—';
+  if ($('moMobile')) $('moMobile').value = rec['Mobile No'] || rec.mobile || '';
+  const st = String(rec['Status of A/c Opening'] || rec.account_status || '').toLowerCase();
+  if ($('moAccountStatus')) {
+    if (st === 'yes' || st === 'y') $('moAccountStatus').value = 'Yes';
+    else if (st === 'no' || st === 'n') $('moAccountStatus').value = 'No';
+    else $('moAccountStatus').value = '';
+  }
+  if ($('moReason')) $('moReason').value = rec['Reason if No'] || rec.reason || '';
+  if ($('moEntryStatus')) {
+    $('moEntryStatus').textContent = name
+      ? ('Loaded: ' + name + (gender ? ' (' + gender + ')' : '') + ' — update Mobile / Status and Submit.')
+      : 'Record found but Farmer Name is empty in source data.';
+  }
 }
 
 async function submitMoEntry(){
@@ -3961,26 +4464,91 @@ function filteredBachatRows(){
   );
 }
 
+let bachatSort = { key: 'division', dir: 'asc' };
+
+function bachatMappedStats(rows){
+  const list = rows || [];
+  let mappedBpos = 0;
+  let mappedBenef = 0;
+  list.forEach(r => {
+    const vc = Number(r.villageCount || 0);
+    const bc = Number(r.beneficiaryCount || 0);
+    if (vc > 0 || bc > 0) {
+      mappedBpos += 1;
+      mappedBenef += bc;
+    }
+  });
+  return { mappedBpos, mappedBenef };
+}
+
 async function renderBachatUI(){
   setupBachatFilters();
   const rows = BACHAT.rows || [];
+  const stats = bachatMappedStats(rows);
   $('bachatBpoCount').textContent = Number(BACHAT.totalBpos || rows.length).toLocaleString();
-  $('bachatBenefCount').textContent = Number(BACHAT.totalBeneficiaries || 0).toLocaleString();
+  if ($('bachatMappedBpoCount')) $('bachatMappedBpoCount').textContent = stats.mappedBpos.toLocaleString();
+  // Prefer sum of mapped beneficiaries; fall back to API total
+  const benefTotal = stats.mappedBenef || Number(BACHAT.totalBeneficiaries || 0);
+  $('bachatBenefCount').textContent = benefTotal.toLocaleString();
   const divs = new Set(rows.map(r => r.division).filter(Boolean));
   $('bachatDivCount').textContent = divs.size.toLocaleString();
   await renderBachatTable();
 }
 
+function sortBachatTable(key){
+  if (bachatSort.key === key) {
+    bachatSort.dir = bachatSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    bachatSort.key = key;
+    bachatSort.dir = 'asc';
+  }
+  document.querySelectorAll('th[data-bachat-sort]').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    const ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = '⇅';
+    if (th.getAttribute('data-bachat-sort') === bachatSort.key) {
+      th.classList.add(bachatSort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      if (ind) ind.textContent = bachatSort.dir === 'asc' ? '▲' : '▼';
+    }
+  });
+  renderBachatTable();
+}
+
+function applyBachatSort(rows, dateMap){
+  const key = bachatSort.key || 'division';
+  const dir = bachatSort.dir === 'desc' ? -1 : 1;
+  const numKeys = { villageCount: 1, beneficiaryCount: 1 };
+  return rows.slice().sort((a, b) => {
+    let av, bv;
+    if (key === 'driveDate') {
+      const ka = String(a.officeId || a.officeName || '');
+      const kb = String(b.officeId || b.officeName || '');
+      av = (dateMap && dateMap[ka]) || '';
+      bv = (dateMap && dateMap[kb]) || '';
+    } else if (numKeys[key]) {
+      av = Number(a[key] || 0);
+      bv = Number(b[key] || 0);
+      return (av - bv) * dir;
+    } else {
+      av = String(a[key] || '').toLowerCase();
+      bv = String(b[key] || '').toLowerCase();
+    }
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return String(a.officeName || '').localeCompare(String(b.officeName || ''));
+  });
+}
+
 async function renderBachatTable(){
   const dateMap = await loadBachatDriveDates();
   const defaultDate = $('bachatDefaultDate')?.value || '';
-  const rows = filteredBachatRows().sort((a,b) =>
-    String(a.division).localeCompare(String(b.division)) ||
-    String(a.subDivision).localeCompare(String(b.subDivision)) ||
-    String(a.soName).localeCompare(String(b.soName)) ||
-    String(a.officeName).localeCompare(String(b.officeName))
-  );
+  const rows = applyBachatSort(filteredBachatRows(), dateMap);
   $('bachatFilteredCount').textContent = rows.length.toLocaleString();
+  // Keep top mapped KPIs in sync with current filter set
+  const allOrFiltered = filteredBachatRows();
+  const st = bachatMappedStats(allOrFiltered);
+  if ($('bachatMappedBpoCount')) $('bachatMappedBpoCount').textContent = st.mappedBpos.toLocaleString();
+  if ($('bachatBenefCount')) $('bachatBenefCount').textContent = st.mappedBenef.toLocaleString();
 
   $('bachatSummaryBody').innerHTML = rows.length ? rows.map((r, i) => {
     const key = String(r.officeId || r.officeName || i);
@@ -4404,8 +4972,235 @@ $('bachatReportDate')?.addEventListener('change', () => {
   if (activeBachatReport.row) renderBachatReportContent();
 });
 
+/* ========== Organised Drive ========== */
+let ORGANISED_DRIVE = { rows: [], ok: false };
+
+function odOfficeRows(){
+  return (typeof BACHAT !== 'undefined' && (BACHAT.rows || []).length)
+    ? (BACHAT.rows || [])
+    : ((DATA.offices || []).map(o => ({
+        officeId: o.officeId, officeName: o.officeName, division: o.division,
+        subDivision: o.subDivision, soName: o.soName, officeType: o.officeType,
+        villageCount: 0, beneficiaryCount: 0
+      })));
+}
+
+function openOrganisedDriveEntry(){
+  try {
+    const modal = document.getElementById('organisedDriveModal');
+    if (!modal) {
+      if (typeof toast === 'function') toast('Organised Drive form not found. Hard-refresh the page (Ctrl+F5).', false);
+      return;
+    }
+    modal.classList.add('open');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    const status = document.getElementById('odStatus');
+    if (status) status.textContent = '';
+    set('odDriveDate', new Date().toISOString().slice(0,10));
+    set('odDriveDays', '1');
+    let rows = [];
+    try { rows = odOfficeRows() || []; } catch(_e){ rows = []; }
+    if (!rows.length && typeof DATA !== 'undefined') {
+      rows = (DATA.offices || []).map(o => ({
+        officeId: o.officeId, officeName: o.officeName, division: o.division,
+        subDivision: o.subDivision, soName: o.soName,
+        villageCount: 0, beneficiaryCount: 0
+      }));
+    }
+    const divs = [...new Set(rows.map(r => r.division).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+    setHtml('odDivision', '<option value="">Select Division</option>' + divs.map(d => '<option value="'+esc(d)+'">'+esc(d)+'</option>').join(''));
+    setHtml('odSub', '<option value="">Select Sub Division</option>');
+    setHtml('odSO', '<option value="">Select SO Name</option>');
+    setHtml('odOffice', '<option value="">Select Office</option>');
+    set('odVillages', '');
+    set('odBeneficiaries', '');
+    set('odMailOverseer', '');
+    if (!divs.length && status) {
+      status.textContent = 'No offices loaded yet. Click Refresh from Google Sheet, then open again.';
+    }
+  } catch (err) {
+    console.error('openOrganisedDriveEntry', err);
+    if (typeof toast === 'function') toast('Organised Drive error: ' + (err.message || err), false);
+    else alert('Organised Drive error: ' + (err.message || err));
+  }
+}
+
+function closeOrganisedDriveEntry(){
+  const modal = $('organisedDriveModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function odOnDivisionChange(){
+  const d = $('odDivision').value;
+  const rows = odOfficeRows().filter(r => !d || r.division === d);
+  const subs = [...new Set(rows.map(r => r.subDivision).filter(Boolean))].sort();
+  $('odSub').innerHTML = '<option value="">Select Sub Division</option>' + subs.map(s => '<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
+  $('odSO').innerHTML = '<option value="">Select SO Name</option>';
+  $('odOffice').innerHTML = '<option value="">Select Office</option>';
+  $('odVillages').value = ''; $('odBeneficiaries').value = ''; $('odMailOverseer').value = '';
+}
+function odOnSubChange(){
+  const d = $('odDivision').value, s = $('odSub').value;
+  const rows = odOfficeRows().filter(r => (!d||r.division===d) && (!s||r.subDivision===s));
+  const sos = [...new Set(rows.map(r => r.soName).filter(Boolean))].sort();
+  $('odSO').innerHTML = '<option value="">Select SO Name</option>' + sos.map(x => '<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+  $('odOffice').innerHTML = '<option value="">Select Office</option>';
+  $('odVillages').value = ''; $('odBeneficiaries').value = '';
+  $('odMailOverseer').value = s ? ('MO- (' + s + ')') : '';
+}
+function odOnSOChange(){
+  const d = $('odDivision').value, s = $('odSub').value, so = $('odSO').value;
+  const rows = odOfficeRows().filter(r => (!d||r.division===d) && (!s||r.subDivision===s) && (!so||r.soName===so));
+  $('odOffice').innerHTML = '<option value="">Select Office</option>' + rows.map(r =>
+    '<option value="'+esc(String(r.officeId||r.officeName))+'">'+esc(r.officeName)+'</option>'
+  ).join('');
+  $('odVillages').value = ''; $('odBeneficiaries').value = '';
+}
+function odOnOfficeChange(){
+  const val = $('odOffice').value;
+  const d = $('odDivision').value, s = $('odSub').value, so = $('odSO').value;
+  const rows = odOfficeRows();
+  const row = rows.find(r => String(r.officeId||r.officeName) === val) ||
+    rows.find(r => r.officeName === val);
+  // Prefer Bachat summary counts; else compute from DATA + PMKISAN
+  let villages = Number(row && row.villageCount || 0);
+  let benef = Number(row && row.beneficiaryCount || 0);
+  if ((!villages || !benef) && row) {
+    const oid = String(row.officeId||'');
+    const oname = String(row.officeName||'').toLowerCase();
+    villages = (DATA.villages||[]).filter(v => v.mapped && ((oid && String(v.officeId)===oid) || (oname && String(v.officeName||'').toLowerCase()===oname))).length;
+    if (typeof officeBeneficiaryCount === 'function') {
+      benef = officeBeneficiaryCount(row, typeof beneficiaryByOfficeMap === 'function' ? beneficiaryByOfficeMap() : null);
+    }
+  }
+  $('odVillages').value = villages ? String(villages) : '0';
+  $('odBeneficiaries').value = benef ? String(benef) : '0';
+  if (!$('odMailOverseer').value) {
+    const sub = $('odSub').value || (row && row.subDivision) || '';
+    if (sub) $('odMailOverseer').value = 'MO- (' + sub + ')';
+  }
+}
+
+async function submitOrganisedDrive(){
+  const officeVal = $('odOffice').value;
+  if (!officeVal) { toast('Select Division → Sub Division → SO → Office.', false); return; }
+  const rows = odOfficeRows();
+  const row = rows.find(r => String(r.officeId||r.officeName) === officeVal) || rows.find(r => r.officeName === officeVal);
+  if (!row) { toast('Office not found.', false); return; }
+  const payload = {
+    officeId: row.officeId || '',
+    officeName: row.officeName || '',
+    division: $('odDivision').value || row.division || '',
+    subDivision: $('odSub').value || row.subDivision || '',
+    soName: $('odSO').value || row.soName || '',
+    villageCount: Number($('odVillages').value || 0),
+    beneficiaryCount: Number($('odBeneficiaries').value || 0),
+    mailOverseer: String($('odMailOverseer').value || '').trim() || ('MO- (' + ($('odSub').value||'') + ')'),
+    driveDate: $('odDriveDate').value || '',
+    driveDays: Number($('odDriveDays').value || 1)
+  };
+  if (!payload.driveDate) { toast('Select Date of Drive.', false); return; }
+  $('odSubmitBtn').disabled = true;
+  $('odStatus').textContent = 'Saving…';
+  try {
+    if (!navigator.onLine) throw new Error('Offline — cannot save Organised Drive right now.');
+    const res = await new Promise((resolve, reject) => {
+      const callback = 'odSave_' + Date.now();
+      const script = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Save timed out')); }, 45000);
+      function cleanup(){ clearTimeout(timer); delete window[callback]; script.remove(); }
+      window[callback] = (data) => { cleanup(); if (data && data.ok) resolve(data); else reject(new Error((data && data.message) || 'Save failed')); };
+      script.onerror = () => { cleanup(); reject(new Error('Google Sheet unreachable')); };
+      script.src = API_URL + '?api=organised_drive_save&callback=' + encodeURIComponent(callback)
+        + '&payload=' + encodeURIComponent(JSON.stringify(payload));
+      document.body.appendChild(script);
+    });
+    toast('Organised Drive saved.', true);
+    $('odStatus').textContent = 'Saved successfully.';
+    await loadOrganisedDriveList();
+    setTimeout(() => closeOrganisedDriveEntry(), 600);
+  } catch (err) {
+    toast(err.message || String(err), false);
+    $('odStatus').textContent = 'Failed: ' + (err.message || String(err));
+  } finally {
+    $('odSubmitBtn').disabled = false;
+  }
+}
+
+async function loadOrganisedDriveList(){
+  const body = $('organisedDriveBody');
+  if (!body) return;
+  try {
+    if (!navigator.onLine) {
+      body.innerHTML = '<tr><td colspan="9" class="empty">Offline — cannot load Organised Drive list.</td></tr>';
+      return;
+    }
+    const res = await jsonp(API_URL + '?api=organised_drive_list', 45000);
+    ORGANISED_DRIVE.rows = (res && res.ok && Array.isArray(res.rows)) ? res.rows : [];
+    ORGANISED_DRIVE.ok = !!(res && res.ok);
+    renderOrganisedDriveTable();
+  } catch (err) {
+    body.innerHTML = '<tr><td colspan="9" class="empty">Load failed: ' + esc(err.message || String(err)) + '</td></tr>';
+  }
+}
+
+function renderOrganisedDriveTable(){
+  const rows = ORGANISED_DRIVE.rows || [];
+  const body = $('organisedDriveBody');
+  if (!body) return;
+  body.innerHTML = rows.length ? rows.map(r => `<tr>
+    <td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.soName)}</td>
+    <td>${esc(r.officeName)}</td>
+    <td class="num">${Number(r.villageCount||0).toLocaleString()}</td>
+    <td class="num">${Number(r.beneficiaryCount||0).toLocaleString()}</td>
+    <td>${esc(r.mailOverseer)}</td>
+    <td>${esc(r.driveDate)}</td>
+    <td class="num">${Number(r.driveDays||0)}</td>
+  </tr>`).join('') : '<tr><td colspan="9" class="empty">No Organised Drive records yet. Click Organised Drive to add.</td></tr>';
+  if ($('organisedDriveStatus')) {
+    $('organisedDriveStatus').textContent = rows.length
+      ? (rows.length.toLocaleString() + ' Organised Drive record(s)')
+      : '';
+  }
+}
+
+function exportOrganisedDriveExcel(){
+  const rows = ORGANISED_DRIVE.rows || [];
+  if (!rows.length) { toast('No Organised Drive data to export.', false); return; }
+  const head = '<tr><th>Division</th><th>Sub Division</th><th>SO Name</th><th>Office Name</th><th>Villages</th><th>Beneficiaries</th><th>Mail Overseer</th><th>Date of Drive</th><th>Days</th></tr>';
+  const body = rows.map(r => `<tr>
+    <td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.soName)}</td><td>${esc(r.officeName)}</td>
+    <td>${Number(r.villageCount||0)}</td><td>${Number(r.beneficiaryCount||0)}</td>
+    <td>${esc(r.mailOverseer)}</td><td>${esc(r.driveDate)}</td><td>${Number(r.driveDays||0)}</td>
+  </tr>`).join('');
+  const table = '<table border="1">' + head + body + '</table>';
+  const doc = '<html><head><meta charset="UTF-8"></head><body>' + (typeof reportHeadingHtml === 'function' ? reportHeadingHtml('Organised Drive — Mail Overseer Plan', '') : '<h2>Organised Drive</h2>') + table + '</body></html>';
+  downloadBlob(doc, 'Organised_Drive_Plan.xls', 'application/vnd.ms-excel;charset=utf-8');
+  toast('Excel downloaded.', true);
+}
+
+function exportOrganisedDrivePDF(){
+  const rows = ORGANISED_DRIVE.rows || [];
+  if (!rows.length) { toast('No Organised Drive data to export.', false); return; }
+  const head = '<tr><th>Division</th><th>Sub Division</th><th>SO</th><th>Office</th><th>Villages</th><th>Beneficiaries</th><th>Mail Overseer</th><th>Date</th><th>Days</th></tr>';
+  const body = rows.map(r => `<tr>
+    <td>${esc(r.division)}</td><td>${esc(r.subDivision)}</td><td>${esc(r.soName)}</td><td>${esc(r.officeName)}</td>
+    <td>${Number(r.villageCount||0)}</td><td>${Number(r.beneficiaryCount||0)}</td>
+    <td>${esc(r.mailOverseer)}</td><td>${esc(r.driveDate)}</td><td>${Number(r.driveDays||0)}</td>
+  </tr>`).join('');
+  if (typeof printReport === 'function') {
+    printReport('Organised Drive — Mail Overseer Plan', head, body);
+  } else {
+    toast('PDF export helper missing.', false);
+  }
+}
+
+
+
 window.addEventListener('load', () => {
-  try { applyBachatAdminUi(); } catch(_e){}
+  
+try { applyBachatAdminUi(); } catch(_e){}
   renderVillageRows(true);
   setOnlineUi(navigator.onLine);
   loadFromLocalDb().finally(() => {
@@ -4414,6 +5209,19 @@ window.addEventListener('load', () => {
   });
   startAutoRefresh();
 });
+
+window.openOrganisedDriveEntry = openOrganisedDriveEntry;
+window.openOrganisedDriveForOffice = openOrganisedDriveForOffice;
+window.closeOrganisedDriveEntry = closeOrganisedDriveEntry;
+window.submitOrganisedDrive = submitOrganisedDrive;
+window.odOnDivisionChange = odOnDivisionChange;
+window.odOnSubChange = odOnSubChange;
+window.odOnSOChange = odOnSOChange;
+window.odOnOfficeChange = odOnOfficeChange;
+window.loadOrganisedDriveList = loadOrganisedDriveList;
+window.exportOrganisedDriveExcel = exportOrganisedDriveExcel;
+window.exportOrganisedDrivePDF = exportOrganisedDrivePDF;
+
 
 window.refreshVillageMappingDashboard = () => loadData(false);
 </script>
