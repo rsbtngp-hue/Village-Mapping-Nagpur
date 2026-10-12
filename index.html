@@ -203,10 +203,16 @@ html,body{width:100%;overflow-x:hidden}
     border:1px solid rgba(255,255,255,.28);box-shadow:none;
     font:12px Inter,Arial,sans-serif;color:#fff;white-space:nowrap;max-width:min(420px,90vw)
   }
+  #connectionSyncBar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);font:11px Inter,Arial,sans-serif;color:#fff;max-width:min(620px,92vw)}
+  #connectionSyncBar .conn-item{display:inline-flex;align-items:center;gap:5px;white-space:normal}
+  #connectionSyncBar .conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#22c55e;box-shadow:0 0 0 3px #22c55e22;flex-shrink:0}
+  #connectionSyncBar.offline .conn-dot{background:#fbbf24;box-shadow:0 0 0 3px #fbbf2422}
+  #connectionSyncBar .conn-label{font-weight:800}
   @media(max-width:700px){
     header .header-logo{height:44px;max-width:90px}
     header .header-status{width:100%;align-items:flex-start}
     #autoRefreshStatus{white-space:normal;max-width:100%}
+    #connectionSyncBar{max-width:100%;width:100%;box-sizing:border-box}
   }
 
 
@@ -285,6 +291,11 @@ html,body{width:100%;overflow-x:hidden}
     </div>
     <div class="header-status">
       <div id="autoRefreshStatus">Connecting…</div>
+      <div id="connectionSyncBar" aria-live="polite">
+        <span class="conn-item"><span class="conn-dot"></span><span class="conn-label" id="connectionStateText">Checking connection…</span></span>
+        <span class="conn-item">Network speed: <b id="networkSpeedText">Checking…</b></span>
+        <span class="conn-item">Village_Mapping last Google sync: <b id="villageSyncTimeText">Not synced yet</b></span>
+      </div>
     </div>
   </div>
 </header>
@@ -897,7 +908,46 @@ function offlineQueueCountPending(){
   return offlineQueueListPending().then(rows => rows.length);
 }
 
+const VILLAGE_MAPPING_SYNC_KEY = 'nagpur_village_mapping_last_google_sync_v1';
+let lastGoogleResponseMs = null;
+
+function formatSyncDateTime(value){
+  if(!value) return 'Not synced yet';
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return 'Not synced yet';
+  return d.toLocaleString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+}
+function markVillageMappingSync(at=Date.now()){
+  try { localStorage.setItem(VILLAGE_MAPPING_SYNC_KEY, String(at)); } catch(_e){}
+  updateConnectionSyncBar();
+}
+function updateConnectionSyncBar(){
+  const bar = document.getElementById('connectionSyncBar');
+  if(!bar) return;
+  const online = !!navigator.onLine;
+  bar.classList.toggle('offline', !online);
+  const state = document.getElementById('connectionStateText');
+  if(state) state.textContent = online ? 'ONLINE' : 'OFFLINE • local save active';
+  const speed = document.getElementById('networkSpeedText');
+  if(speed){
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if(!online) speed.textContent = 'Unavailable offline';
+    else if(conn && Number.isFinite(Number(conn.downlink)) && Number(conn.downlink) > 0) speed.textContent = Number(conn.downlink).toFixed(1) + ' Mbps (browser estimate)';
+    else if(lastGoogleResponseMs !== null) speed.textContent = 'Google response ' + lastGoogleResponseMs + ' ms';
+    else speed.textContent = 'Measuring…';
+  }
+  let last = null;
+  try { last = Number(localStorage.getItem(VILLAGE_MAPPING_SYNC_KEY)) || null; } catch(_e){}
+  const time = document.getElementById('villageSyncTimeText');
+  if(time) time.textContent = last ? formatSyncDateTime(last) : 'Not synced yet in this browser';
+}
+function recordGoogleResponseTime(ms){
+  lastGoogleResponseMs = Math.max(0, Math.round(ms));
+  updateConnectionSyncBar();
+}
+
 function setOnlineUi(online){
+  updateConnectionSyncBar();
   isOnline = online;
   const badge = document.querySelector('.live-badge');
   if (badge) {
@@ -1035,6 +1085,7 @@ async function processSyncQueue(){
       try {
         if (item.type === 'save_mapping') {
           await syncSaveMapping(item.payload);
+          markVillageMappingSync(Date.now());
         } else if (item.type === 'pmkisan_append') {
           await syncPmkisanChunk(item.payload);
         } else if (item.type === 'bachat_save') {
@@ -1133,6 +1184,10 @@ window.addEventListener('offline', () => {
   toast('You are offline. Changes will be saved locally and uploaded later.', true);
   loadFromLocalDb();
 });
+window.addEventListener('online', updateConnectionSyncBar);
+window.addEventListener('offline', updateConnectionSyncBar);
+if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', updateConnectionSyncBar);
+
 
 
 
@@ -1663,6 +1718,7 @@ function submitMappings(){
         return;
       }
 
+      markVillageMappingSync(Date.now());
       let msg = res.message || 'Mapping saved.';
       if(res.duplicates?.length) msg += ' Existing mapping skipped: ' + res.duplicates.join(', ') + '.';
       if(res.notFound?.length) msg += ' Not found in master: ' + res.notFound.join(', ') + '.';
@@ -3255,6 +3311,7 @@ function readDashboardCache(){
 }
 
 async function loadData(afterSave=false){
+  updateConnectionSyncBar();
   if(dataLoading) return;
   dataLoading = true;
   if(!afterSave) setStatus(navigator.onLine ? 'Loading Google Sheet data…' : 'Loading local DB…');
@@ -3278,7 +3335,9 @@ async function loadData(afterSave=false){
   }
 
   try {
+    const googleRequestStartedAt = performance.now();
     const res = await jsonp(API_URL + '?api=data', 45000);
+    recordGoogleResponseTime(performance.now() - googleRequestStartedAt);
     if(!res || !res.ok) throw new Error(res?.message || 'Google Apps Script returned no usable data.');
 
     await applyLocalDashboardData(res, 'Google Sheet live');
