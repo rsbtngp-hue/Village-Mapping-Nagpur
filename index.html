@@ -203,17 +203,22 @@ html,body{width:100%;overflow-x:hidden}
     border:1px solid rgba(255,255,255,.28);box-shadow:none;
     font:12px Inter,Arial,sans-serif;color:#fff;white-space:nowrap;max-width:min(420px,90vw)
   }
-  #connectionSyncBar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);font:11px Inter,Arial,sans-serif;color:#fff;max-width:min(620px,92vw)}
-  #connectionSyncBar .conn-item{display:inline-flex;align-items:center;gap:5px;white-space:normal}
-  #connectionSyncBar .conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#22c55e;box-shadow:0 0 0 3px #22c55e22;flex-shrink:0}
-  #connectionSyncBar.offline .conn-dot{background:#fbbf24;box-shadow:0 0 0 3px #fbbf2422}
-  #connectionSyncBar .conn-label{font-weight:800}
   @media(max-width:700px){
     header .header-logo{height:44px;max-width:90px}
     header .header-status{width:100%;align-items:flex-start}
     #autoRefreshStatus{white-space:normal;max-width:100%}
-    #connectionSyncBar{max-width:100%;width:100%;box-sizing:border-box}
   }
+  #autoRefreshStatus{display:flex!important;flex-direction:column;align-items:flex-start;gap:4px;border-radius:12px!important;white-space:normal!important;line-height:1.35}
+  .sync-main{font-weight:800}.sync-meta{font-size:10px;opacity:.94;display:flex;gap:10px;flex-wrap:wrap}
+  .mismatch-tab{background:linear-gradient(135deg,#7c2d12,#b54708);color:#fff;border-color:#b54708}.mismatch-tab.active{background:#7c2d12}
+  .mismatch-card{border-top:4px solid #b54708;background:linear-gradient(135deg,#fff,#fffaf2)}
+  .mismatch-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
+  .mismatch-office{min-width:260px;width:100%;height:34px;border:1px solid #cbd5e1;border-radius:6px;padding:0 8px}
+  .mismatch-update{padding:7px 10px;background:#1769aa;color:white}
+  .admin-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .admin-pill{font-size:11px;color:#fff;background:#ffffff22;border:1px solid #ffffff55;border-radius:999px;padding:6px 10px}
+  .admin-login{background:#fff;color:#12385b;padding:8px 12px}
+  .mismatch-empty{padding:22px;text-align:center;color:#667085}
 
 
   /* Bachat Parva Special Drive */
@@ -290,12 +295,8 @@ html,body{width:100%;overflow-x:hidden}
       </div>
     </div>
     <div class="header-status">
-      <div id="autoRefreshStatus">Connecting…</div>
-      <div id="connectionSyncBar" aria-live="polite">
-        <span class="conn-item"><span class="conn-dot"></span><span class="conn-label" id="connectionStateText">Checking connection…</span></span>
-        <span class="conn-item">Network speed: <b id="networkSpeedText">Checking…</b></span>
-        <span class="conn-item">Village_Mapping last Google sync: <b id="villageSyncTimeText">Not synced yet</b></span>
-      </div>
+      <div id="autoRefreshStatus"><span class="sync-main">Connecting…</span><span class="sync-meta"><span id="networkSpeed">Network: checking…</span><span id="googleSyncTime">Last Google sync: not yet synced</span></span></div>
+      <div class="admin-controls"><span id="adminStatus" class="admin-pill">Admin locked</span><button class="admin-login" id="adminLoginBtn" onclick="toggleAdminAccess()">🔐 Admin Login</button></div>
     </div>
   </div>
 </header>
@@ -303,9 +304,10 @@ html,body{width:100%;overflow-x:hidden}
 <div class="wrap">
   <div class="tabs">
     <button class="tab active" onclick="showTab('mapping',this)">Village Mapping</button>
+    <button class="tab mismatch-tab" onclick="showTab('mismatch',this)">Mismatch Village Mapping</button>
     <button class="tab" onclick="showTab('dashboard',this)">Dashboard</button>
-    <button class="tab pmkisan-tab" onclick="showTab('pmkisan',this)">PM-KISAN Beneficiary List</button>
-    <button class="tab bachat-tab" onclick="showTab('bachat',this)">Information for Special Drive - Oct -26</button>
+    <button class="tab pmkisan-tab admin-protected-tab" id="pmkisanTab" style="display:none" onclick="showTab('pmkisan',this)">PM-KISAN Beneficiary List</button>
+    <button class="tab bachat-tab admin-protected-tab" id="bachatTab" style="display:none" onclick="showTab('bachat',this)">Information for Special Drive - Oct -26</button>
   </div>
 
   <section id="mapping" class="panel active">
@@ -368,6 +370,19 @@ html,body{width:100%;overflow-x:hidden}
     </div>
   </section>
 
+  <section id="mismatch" class="panel">
+    <div class="card mismatch-card">
+      <div class="dashboard-titlebar"><div><h2>Mismatch Village Mapping</h2><div class="filter-note">Checks each master village's District against the approved Division–District list. Correct a mismatch by selecting the right Delivery Post Office.</div></div><span class="pill unmapped" id="mismatchCount">0 mismatches</span></div>
+      <div class="mismatch-tools">
+        <div><label>Division-wise View</label><select id="mismatchDivision"><option value="">All Expected Divisions</option></select></div>
+        <div><label>Search Village / District / Current Office</label><input id="mismatchSearch" type="text" placeholder="Type village, district or current office..."></div>
+      </div>
+      <datalist id="mismatchOfficeOptions"></datalist>
+      <div class="table-wrap"><table><thead><tr><th>District</th><th>Expected Division</th><th>Village</th><th>Current Division</th><th>Current Delivery Office</th><th>Correct Delivery Office (search)</th><th>Action</th></tr></thead><tbody id="mismatchBody"><tr><td colspan="7" class="loading">Load village master data to check mismatches.</td></tr></tbody></table></div>
+      <div class="hint" style="margin-top:10px">Correction updates the selected village's Delivery Office mapping through the same Google Sheet save API. If offline, the correction is queued for sync.</div>
+    </div>
+  </section>
+
   <section id="dashboard" class="panel">
     <div class="card">
       <div class="dashboard-titlebar">
@@ -419,7 +434,7 @@ html,body{width:100%;overflow-x:hidden}
 
   </section>
 
-  <section id="pmkisan" class="panel">
+  <section id="pmkisan" class="panel" style="display:none">
     <div class="card">
       <div class="dashboard-titlebar">
         <div>
@@ -507,7 +522,7 @@ html,body{width:100%;overflow-x:hidden}
     </div>
   </section>
 
-  <section id="bachat" class="panel">
+  <section id="bachat" class="panel" style="display:none">
     <div class="card">
       <div class="dashboard-titlebar">
         <div>
@@ -908,46 +923,7 @@ function offlineQueueCountPending(){
   return offlineQueueListPending().then(rows => rows.length);
 }
 
-const VILLAGE_MAPPING_SYNC_KEY = 'nagpur_village_mapping_last_google_sync_v1';
-let lastGoogleResponseMs = null;
-
-function formatSyncDateTime(value){
-  if(!value) return 'Not synced yet';
-  const d = new Date(value);
-  if(Number.isNaN(d.getTime())) return 'Not synced yet';
-  return d.toLocaleString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-}
-function markVillageMappingSync(at=Date.now()){
-  try { localStorage.setItem(VILLAGE_MAPPING_SYNC_KEY, String(at)); } catch(_e){}
-  updateConnectionSyncBar();
-}
-function updateConnectionSyncBar(){
-  const bar = document.getElementById('connectionSyncBar');
-  if(!bar) return;
-  const online = !!navigator.onLine;
-  bar.classList.toggle('offline', !online);
-  const state = document.getElementById('connectionStateText');
-  if(state) state.textContent = online ? 'ONLINE' : 'OFFLINE • local save active';
-  const speed = document.getElementById('networkSpeedText');
-  if(speed){
-    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if(!online) speed.textContent = 'Unavailable offline';
-    else if(conn && Number.isFinite(Number(conn.downlink)) && Number(conn.downlink) > 0) speed.textContent = Number(conn.downlink).toFixed(1) + ' Mbps (browser estimate)';
-    else if(lastGoogleResponseMs !== null) speed.textContent = 'Google response ' + lastGoogleResponseMs + ' ms';
-    else speed.textContent = 'Measuring…';
-  }
-  let last = null;
-  try { last = Number(localStorage.getItem(VILLAGE_MAPPING_SYNC_KEY)) || null; } catch(_e){}
-  const time = document.getElementById('villageSyncTimeText');
-  if(time) time.textContent = last ? formatSyncDateTime(last) : 'Not synced yet in this browser';
-}
-function recordGoogleResponseTime(ms){
-  lastGoogleResponseMs = Math.max(0, Math.round(ms));
-  updateConnectionSyncBar();
-}
-
 function setOnlineUi(online){
-  updateConnectionSyncBar();
   isOnline = online;
   const badge = document.querySelector('.live-badge');
   if (badge) {
@@ -1085,7 +1061,6 @@ async function processSyncQueue(){
       try {
         if (item.type === 'save_mapping') {
           await syncSaveMapping(item.payload);
-          markVillageMappingSync(Date.now());
         } else if (item.type === 'pmkisan_append') {
           await syncPmkisanChunk(item.payload);
         } else if (item.type === 'bachat_save') {
@@ -1104,6 +1079,7 @@ async function processSyncQueue(){
     }
     const left = await offlineQueueCountPending();
     if (left === 0) {
+      markGoogleSync(Date.now());
       toast('All offline changes uploaded to Google Sheet.', true);
       setAutoRefreshStatus('Online • all local changes synced');
       // Refresh from sheet after successful sync
@@ -1184,10 +1160,6 @@ window.addEventListener('offline', () => {
   toast('You are offline. Changes will be saved locally and uploaded later.', true);
   loadFromLocalDb();
 });
-window.addEventListener('online', updateConnectionSyncBar);
-window.addEventListener('offline', updateConnectionSyncBar);
-if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', updateConnectionSyncBar);
-
 
 
 
@@ -1308,24 +1280,70 @@ function toast(msg, ok=true){
 
 function setStatus(msg){ $('mappingStatus').textContent = msg; }
 
+function networkDescription(){
+  const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!navigator.onLine) return 'Network: offline';
+  if (c) {
+    const parts=[];
+    if (c.effectiveType) parts.push(c.effectiveType.toUpperCase());
+    if (Number.isFinite(Number(c.downlink)) && Number(c.downlink)>0) parts.push('~'+Number(c.downlink).toFixed(1)+' Mbps');
+    if (Number.isFinite(Number(c.rtt)) && Number(c.rtt)>0) parts.push('RTT '+Math.round(Number(c.rtt))+' ms');
+    const ms=Number(window.__googleSyncResponseMs||0); if(ms) parts.push('Google response '+ms+' ms');
+    if(parts.length) return 'Network: '+parts.join(' • ');
+  }
+  const ms=Number(window.__googleSyncResponseMs||0);
+  return 'Network: online (speed estimate unavailable)'+(ms?' • Google response '+ms+' ms':'');
+}
+function refreshSyncMeta(){
+  const n=$('networkSpeed'), g=$('googleSyncTime');
+  if(n) n.textContent=networkDescription();
+  if(g){
+    let ts=0; try{ts=Number(localStorage.getItem('nagpur_village_last_google_sync')||0)}catch(_e){}
+    g.textContent='Last Google sync: '+(ts?new Date(ts).toLocaleString('en-IN'):'not yet synced');
+  }
+}
+function markGoogleSync(ts=Date.now()){
+  try{localStorage.setItem('nagpur_village_last_google_sync',String(ts))}catch(_e){}
+  refreshSyncMeta();
+}
 function setAutoRefreshStatus(message){
   let el = $('autoRefreshStatus');
-  if(!el){
-    // Fallback if header not yet in DOM
-    el = document.createElement('div');
-    el.id = 'autoRefreshStatus';
-    const host = document.querySelector('header .header-status') || document.querySelector('header') || document.body;
-    host.appendChild(el);
+  if(!el){el=document.createElement('div');el.id='autoRefreshStatus';(document.querySelector('header .header-status')||document.querySelector('header')||document.body).appendChild(el);}
+  let main=el.querySelector('.sync-main');
+  let meta=el.querySelector('.sync-meta');
+  if(!main){el.innerHTML='<span class="sync-main"></span><span class="sync-meta"><span id="networkSpeed"></span><span id="googleSyncTime"></span></span>';main=el.querySelector('.sync-main');meta=el.querySelector('.sync-meta');}
+  main.textContent=String(message||'');
+  if(meta){meta.style.display='flex';}
+  refreshSyncMeta();
+}
+let adminAccessGranted=false;
+function toggleAdminAccess(){
+  if(adminAccessGranted){
+    adminAccessGranted=false;
+    ['pmkisanTab','bachatTab'].forEach(id=>{const e=$(id);if(e)e.style.display='none'});
+    ['pmkisan','bachat'].forEach(id=>{const e=$(id);if(e){e.classList.remove('active');e.style.display='none'}});
+    $('adminStatus').textContent='Admin locked';$('adminLoginBtn').textContent='🔐 Admin Login';
+    const active=document.querySelector('.tab.active');
+    if(!active || active.classList.contains('admin-protected-tab')) showTab('mapping',document.querySelectorAll('.tab')[0]);
+    toast('Admin-only sections are hidden.',true);return;
   }
-  el.textContent = message;
+  const password=prompt('Enter Admin password to access PM-KISAN Beneficiary List and Information for Special Drive - Oct -26:');
+  if(password!=='doadmin'){if(password!==null)toast('Incorrect admin password.',false);return;}
+  adminAccessGranted=true;
+  $('pmkisanTab').style.display='inline-block';$('bachatTab').style.display='inline-block';
+  $('pmkisan').style.display='';$('bachat').style.display='';
+  $('adminStatus').textContent='Admin unlocked';$('adminLoginBtn').textContent='🔓 Hide Admin Sections';
+  toast('Admin-only sections are now available.',true);
 }
 
 function showTab(id, btn){
+  if ((id==='pmkisan'||id==='bachat') && !adminAccessGranted){toast('Admin login is required to open this section.',false);return;}
   document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   $(id).classList.add('active');
   btn.classList.add('active');
   if(id === 'dashboard') renderDashboard();
+  if(id === 'mismatch') renderMismatchTable();
   if(id === 'pmkisan') loadPmkisanSummary();
   if(id === 'bachat'){ applyBachatAdminUi(); loadBachatSummary(); try{ loadPmkisanSummary(); }catch(_e){} }
 }
@@ -1443,9 +1461,8 @@ function renderOfficeList(){
   list.innerHTML = offices.length ? offices.map(o => `
     <div class="search-item office-option" data-office-id="${esc(o.officeId)}">
       <b>${esc(o.officeName)}</b>
-      <span style="color:#667085">
-        (${esc(o.officeType)} • SOL ${esc(o.solId)} • ${esc(o.pincode)})
-      </span>
+      <span style="color:#667085"> • ${esc(o.soName || 'SO not available')} (${esc(o.division || 'Division not available')})</span>
+      <span style="color:#667085"> (${esc(o.officeType)} • SOL ${esc(o.solId)} • ${esc(o.pincode)})</span>
     </div>`).join('') :
     '<div class="search-item">No delivery office found</div>';
 
@@ -1718,7 +1735,6 @@ function submitMappings(){
         return;
       }
 
-      markVillageMappingSync(Date.now());
       let msg = res.message || 'Mapping saved.';
       if(res.duplicates?.length) msg += ' Existing mapping skipped: ' + res.duplicates.join(', ') + '.';
       if(res.notFound?.length) msg += ' Not found in master: ' + res.notFound.join(', ') + '.';
@@ -1786,6 +1802,71 @@ function resetMappingFormToDefault(){
   if($('noVillageAttached')) $('noVillageAttached').checked = false;
   $('villageRows').innerHTML = '';
   addVillageRow();
+}
+
+const DIVISION_DISTRICT_MAP = [
+  {division:'Akola Division',district:'Akola'}, {division:'Akola Division',district:'Washim'},
+  {division:'Amravati Division',district:'Amravati'}, {division:'Buldana Division',district:'Buldhana'},
+  {division:'Chandrapur Division',district:'Chandrapur'}, {division:'Gadchiroli Division',district:'Gadchiroli'},
+  {division:'Nagpur Moffusil Division',district:'Nagpur'}, {division:'Nagpur Moffusil Division',district:'Bhandara'},
+  {division:'Nagpur Moffusil Division',district:'Gondia'}, {division:'Wardha Division',district:'Wardha'},
+  {division:'Yeotmal Division',district:'Yavatmal'}
+];
+let mismatchRows=[];
+function expectedDivisionForDistrict(district){
+  const norm=String(district||'').trim().toLowerCase();
+  const row=DIVISION_DISTRICT_MAP.find(x=>x.district.toLowerCase()===norm);
+  return row?row.division:'';
+}
+function renderMismatchTable(){
+  if(!$('mismatchBody'))return;
+  const divisionSelect=$('mismatchDivision');
+  const old=divisionSelect.value;
+  const expectedDivisions=unique(DIVISION_DISTRICT_MAP.map(x=>x.division));
+  divisionSelect.innerHTML='<option value="">All Expected Divisions</option>'+expectedDivisions.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+  if(expectedDivisions.includes(old))divisionSelect.value=old;
+  const officeOptions=DATA.offices.slice().sort((a,b)=>String(a.officeName).localeCompare(String(b.officeName)));
+  $('mismatchOfficeOptions').innerHTML=officeOptions.map(o=>'<option value="'+esc(o.officeName)+' — '+esc(o.soName||'')+' ('+esc(o.division||'')+')"></option>').join('');
+  const officeById=new Map(DATA.offices.map(o=>[String(o.officeId),o]));
+  mismatchRows=(DATA.villages||[]).filter(v=>MASTER_VILLAGE_NAMES.has(String(v.village||v.villageName||'').trim().toLowerCase())).map(v=>{
+    const district=String(v.district||v.District||v.districtName||v.District_Name||v.district_name||'').trim();
+    const expected=expectedDivisionForDistrict(district);
+    if(!expected)return null;
+    const office=officeById.get(String(v.officeId||'')) || DATA.offices.find(o=>String(o.officeName||'').trim().toLowerCase()===String(v.officeName||'').trim().toLowerCase()) || null;
+    const currentDivision=String(office?.division||v.division||'').trim();
+    const isMapped=Boolean(v.mapped || v.officeId || v.officeName);
+    const mismatch=isMapped && Boolean(office) && currentDivision.toLowerCase()!==expected.toLowerCase();
+    return mismatch?{village:String(v.village||v.villageName||''),district,expectedDivision:expected,currentDivision,officeName:String(office?.officeName||v.officeName||''),officeId:String(office?.officeId||v.officeId||''),record:v}:null;
+  }).filter(Boolean);
+  const selectedDivision=divisionSelect.value;
+  const query=String($('mismatchSearch').value||'').trim().toLowerCase();
+  const rows=mismatchRows.filter(r=>(!selectedDivision||r.expectedDivision===selectedDivision)&&(!query||[r.village,r.district,r.expectedDivision,r.currentDivision,r.officeName].some(x=>String(x).toLowerCase().includes(query))));
+  $('mismatchCount').textContent=rows.length.toLocaleString()+' mismatches';
+  $('mismatchBody').innerHTML=rows.length?rows.map(r=>{
+    const idx=mismatchRows.indexOf(r);
+    return '<tr><td>'+esc(r.district)+'</td><td><b>'+esc(r.expectedDivision)+'</b></td><td>'+esc(r.village)+'</td><td>'+esc(r.currentDivision||'—')+'</td><td>'+esc(r.officeName||'Not mapped')+'</td><td><input class="mismatch-office" list="mismatchOfficeOptions" id="mismatchOffice_'+idx+'" placeholder="Search office name…" value=""></td><td><button class="mismatch-update" onclick="correctMismatchMapping('+idx+')">Update</button></td></tr>';
+  }).join(''):'<tr><td colspan="7" class="mismatch-empty">No mismatch records found for the selected filter.</td></tr>';
+}
+async function correctMismatchMapping(index){
+  const row=mismatchRows[index]; if(!row)return;
+  const typed=String($('mismatchOffice_'+index)?.value||'').trim();
+  if(!typed){toast('Search and select the correct Delivery Post Office.',false);return;}
+  const target=DATA.offices.find(o=>{
+    const label=String(o.officeName||'')+' — '+String(o.soName||'')+' ('+String(o.division||'')+')';
+    return label.toLowerCase()===typed.toLowerCase() || String(o.officeName||'').toLowerCase()===typed.toLowerCase();
+  });
+  if(!target){toast('Select an office from the searchable suggestions. Free-typed office names are not accepted.',false);return;}
+  if(!confirm('Update village “'+row.village+'” to Delivery Office “'+target.officeName+'” ('+target.division+')?'))return;
+  const mappingRows=[{village:row.village,villageName:row.village,officeId:target.officeId,office_id:target.officeId}];
+  const payload={officeId:target.officeId,office_id:target.officeId,items:mappingRows,rows:mappingRows,mappingRows,mappings:mappingRows,overwrite:true,noVillageAttached:false,mappingStatus:'MAPPED'};
+  try{
+    if(navigator.onLine){await syncSaveMapping(payload);markGoogleSync(Date.now());toast('Village mapping correction saved to Google Sheet.',true);await loadData(true);}
+    else{await offlineQueueAdd({type:'save_mapping',payload});await persistMappingLocally(target,[row.village],true);toast('Correction saved locally and queued for Google Sheet sync.',true);}
+    renderMismatchTable();
+  }catch(err){
+    try{await offlineQueueAdd({type:'save_mapping',payload});await persistMappingLocally(target,[row.village],true);toast('Google Sheet unavailable; correction queued for sync.',true);renderMismatchTable();}
+    catch(e){toast('Unable to save correction: '+String(err?.message||err),false);}
+  }
 }
 
 function setupMappingControls(firstLoad=false){
@@ -3311,7 +3392,6 @@ function readDashboardCache(){
 }
 
 async function loadData(afterSave=false){
-  updateConnectionSyncBar();
   if(dataLoading) return;
   dataLoading = true;
   if(!afterSave) setStatus(navigator.onLine ? 'Loading Google Sheet data…' : 'Loading local DB…');
@@ -3335,12 +3415,13 @@ async function loadData(afterSave=false){
   }
 
   try {
-    const googleRequestStartedAt = performance.now();
+    const syncStartedAt = performance.now();
     const res = await jsonp(API_URL + '?api=data', 45000);
-    recordGoogleResponseTime(performance.now() - googleRequestStartedAt);
     if(!res || !res.ok) throw new Error(res?.message || 'Google Apps Script returned no usable data.');
 
     await applyLocalDashboardData(res, 'Google Sheet live');
+    window.__googleSyncResponseMs = Math.round(performance.now() - syncStartedAt);
+    markGoogleSync(Date.now());
     setOnlineUi(true);
     setAutoRefreshStatus('Google Sheet synced • ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
     if(afterSave){ lastSubmittedVillages = []; renderMappingTable(); }
@@ -4566,6 +4647,13 @@ $('bachatReportDate')?.addEventListener('change', () => {
 
 window.addEventListener('load', () => {
   try { applyBachatAdminUi(); } catch(_e){}
+  try {
+    $('mismatchDivision')?.addEventListener('change', renderMismatchTable);
+    $('mismatchSearch')?.addEventListener('input', renderMismatchTable);
+    refreshSyncMeta();
+    const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(conn && conn.addEventListener) conn.addEventListener('change', refreshSyncMeta);
+  } catch(_e){}
   renderVillageRows(true);
   setOnlineUi(navigator.onLine);
   loadFromLocalDb().finally(() => {
